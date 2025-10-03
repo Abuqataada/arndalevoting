@@ -1,0 +1,9 @@
+Flask
+Flask-SQLAlchemy
+Werkzeug
+Pillow
+PyMySQL==1.1.0
+cryptography==41.0.4
+gunicorn
+cloudinary==1.36.0
+python-dotenv==1.0.0
