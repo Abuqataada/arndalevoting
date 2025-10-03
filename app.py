@@ -11,14 +11,14 @@ import cloudinary.uploader
 import cloudinary.api
 from dotenv import load_dotenv
 
+# Load environment variables FIRST
+load_dotenv()
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'arndale-academy-secret-key-2024')
 
-# Load environment variables
-load_dotenv()
-
-# Aiven MySQL Configuration for Production
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'defaultdb.db')
+# Neon PostgreSQL Configuration
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'postgresql://neondb_owner:npg_CzyA6c9imSWL@ep-noisy-sun-a41ubng9-pooler.us-east-1.aws.neon.tech/voting_db?sslmode=require')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_recycle': 300,
@@ -46,14 +46,14 @@ cloudinary.config(
 
 db = SQLAlchemy(app)
 
-# Database Models (keep your existing models here)
+# Database Models (Updated for PostgreSQL)
 class Session(db.Model):
     __tablename__ = 'sessions'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(255), unique=True, nullable=False)
     academic_year = db.Column(db.String(50), nullable=False)
     is_active = db.Column(db.Boolean, default=False)
-    created_date = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    created_date = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     description = db.Column(db.Text)
     
     positions = db.relationship('Position', backref='session', lazy=True, cascade='all, delete-orphan')
@@ -62,7 +62,7 @@ class Position(db.Model):
     __tablename__ = 'positions'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(255), nullable=False)
-    session_id = db.Column(db.Integer, db.ForeignKey('sessions.id'), nullable=False)
+    session_id = db.Column(db.Integer, db.ForeignKey('sessions.id', ondelete='CASCADE'), nullable=False)
     display_order = db.Column(db.Integer, default=0)
     description = db.Column(db.Text)
     
@@ -72,8 +72,8 @@ class Candidate(db.Model):
     __tablename__ = 'candidates'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(255), nullable=False)
-    position_id = db.Column(db.Integer, db.ForeignKey('positions.id'), nullable=False)
-    photo_filename = db.Column(db.String(500))
+    position_id = db.Column(db.Integer, db.ForeignKey('positions.id', ondelete='CASCADE'), nullable=False)
+    photo_url = db.Column(db.String(500))
     grade = db.Column(db.String(50))
     manifesto = db.Column(db.Text)
     votes = db.Column(db.Integer, default=0)
@@ -84,9 +84,9 @@ class Voter(db.Model):
     student_id = db.Column(db.String(100), unique=True, nullable=False)
     name = db.Column(db.String(255), nullable=False)
     grade = db.Column(db.String(50), nullable=False)
-    photo_filename = db.Column(db.String(500))
+    photo_url = db.Column(db.String(500))
     voter_code = db.Column(db.String(10), unique=True, nullable=False)
-    registered_date = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    registered_date = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     has_voted = db.Column(db.Boolean, default=False)
     
     @staticmethod
@@ -123,11 +123,11 @@ class Voter(db.Model):
 class VotingLog(db.Model):
     __tablename__ = 'voting_log'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    session_id = db.Column(db.Integer, db.ForeignKey('sessions.id'), nullable=False)
-    position_id = db.Column(db.Integer, db.ForeignKey('positions.id'), nullable=False)
-    candidate_id = db.Column(db.Integer, db.ForeignKey('candidates.id'), nullable=False)
-    voter_id = db.Column(db.Integer, db.ForeignKey('voters.id'), nullable=False)
-    vote_timestamp = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    session_id = db.Column(db.Integer, db.ForeignKey('sessions.id', ondelete='CASCADE'), nullable=False)
+    position_id = db.Column(db.Integer, db.ForeignKey('positions.id', ondelete='CASCADE'), nullable=False)
+    candidate_id = db.Column(db.Integer, db.ForeignKey('candidates.id', ondelete='CASCADE'), nullable=False)
+    voter_id = db.Column(db.Integer, db.ForeignKey('voters.id', ondelete='CASCADE'), nullable=False)
+    vote_timestamp = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     
     session = db.relationship('Session')
     position = db.relationship('Position')
@@ -179,7 +179,7 @@ def get_voter_stats():
         'participation_rate': round(participation_rate, 1)
     }
 
-# Routes (keep all your existing routes here)
+# Routes (your existing routes remain the same)
 @app.route('/')
 def index():
     active_session = get_active_session()
@@ -386,12 +386,12 @@ def create_candidate():
             return jsonify({'error': 'Position not found'}), 404
         
         # Handle photo upload to Cloudinary
-        photo_filename = None
+        photo_url = None
         if 'photo' in request.files:
             photo = request.files['photo']
             if photo and photo.filename and allowed_file(photo.filename):
-                photo_filename = upload_to_cloudinary(photo, 'candidates')
-                if not photo_filename:
+                photo_url = upload_to_cloudinary(photo, 'candidates')
+                if not photo_url:
                     return jsonify({'error': 'Failed to upload photo'}), 500
         
         new_candidate = Candidate(
@@ -399,7 +399,7 @@ def create_candidate():
             position_id=position_id,
             grade=grade,
             manifesto=manifesto,
-            photo_filename=photo_filename
+            photo_url=photo_url
         )
         db.session.add(new_candidate)
         db.session.commit()
@@ -411,7 +411,7 @@ def create_candidate():
                 'id': new_candidate.id,
                 'name': new_candidate.name,
                 'grade': new_candidate.grade,
-                'photo_filename': new_candidate.photo_filename,
+                'photo_url': new_candidate.photo_url,
                 'manifesto': new_candidate.manifesto
             }
         })
@@ -429,7 +429,7 @@ def get_position_candidates(position_id):
             'id': candidate.id,
             'name': candidate.name,
             'grade': candidate.grade,
-            'photo_filename': candidate.photo_filename,
+            'photo_url': candidate.photo_url,
             'manifesto': candidate.manifesto,
             'votes': candidate.votes
         })
@@ -443,8 +443,8 @@ def delete_candidate(candidate_id):
     
     try:
         # Delete photo from Cloudinary if exists
-        if candidate_to_delete.photo_filename:
-            delete_from_cloudinary(candidate_to_delete.photo_filename)
+        if candidate_to_delete.photo_url:
+            delete_from_cloudinary(candidate_to_delete.photo_url)
         
         db.session.delete(candidate_to_delete)
         db.session.commit()
@@ -473,12 +473,12 @@ def create_voter():
             return jsonify({'error': f'Voter "{name}" is already registered'}), 400
         
         # Handle photo upload to Cloudinary
-        photo_filename = None
+        photo_url = None
         if 'photo' in request.files:
             photo = request.files['photo']
             if photo and photo.filename and allowed_file(photo.filename):
-                photo_filename = upload_to_cloudinary(photo, 'voters')
-                if not photo_filename:
+                photo_url = upload_to_cloudinary(photo, 'voters')
+                if not photo_url:
                     return jsonify({'error': 'Failed to upload photo'}), 500
         
         # Generate unique student ID and voter code
@@ -489,9 +489,9 @@ def create_voter():
             student_id=student_id,
             name=name,
             grade=grade,
-            photo_filename=photo_filename,
+            photo_url=photo_url,
             voter_code=voter_code,
-            registered_date=datetime.utcnow()
+            registered_date=datetime.now(timezone.utc)
         )
         db.session.add(new_voter)
         db.session.commit()
@@ -505,7 +505,7 @@ def create_voter():
                 'name': new_voter.name,
                 'grade': new_voter.grade,
                 'voter_code': new_voter.voter_code,
-                'photo_filename': new_voter.photo_filename
+                'photo_url': new_voter.photo_url
             }
         })
     except Exception as e:
@@ -523,7 +523,7 @@ def get_voters():
             'student_id': voter.student_id,
             'name': voter.name,
             'grade': voter.grade,
-            'photo_filename': voter.photo_filename,
+            'photo_url': voter.photo_url,
             'voter_code': voter.voter_code,
             'registered_date': voter.registered_date.strftime('%Y-%m-%d'),
             'has_voted': voter.has_voted
@@ -538,8 +538,8 @@ def delete_voter(voter_id):
     
     try:
         # Delete photo from Cloudinary if exists
-        if voter_to_delete.photo_filename:
-            delete_from_cloudinary(voter_to_delete.photo_filename)
+        if voter_to_delete.photo_url:
+            delete_from_cloudinary(voter_to_delete.photo_url)
         
         db.session.delete(voter_to_delete)
         db.session.commit()
@@ -604,7 +604,7 @@ def get_voting_positions():
                 'id': candidate.id,
                 'name': candidate.name,
                 'grade': candidate.grade,
-                'photo_filename': candidate.photo_filename,
+                'photo_url': candidate.photo_url,
                 'manifesto': candidate.manifesto,
                 'votes': candidate.votes
             })
@@ -731,7 +731,7 @@ def get_session_results(session_id):
                 'id': candidate.id,
                 'name': candidate.name,
                 'grade': candidate.grade,
-                'photo_filename': candidate.photo_filename,
+                'photo_url': candidate.photo_url,
                 'manifesto': candidate.manifesto,
                 'votes': candidate.votes,
                 'percentage': round(percentage, 1),
@@ -772,7 +772,7 @@ def test_db():
         
         return jsonify({
             'status': 'success',
-            'message': 'Database connection successful',
+            'message': 'PostgreSQL database connection successful',
             'counts': {
                 'sessions': session_count,
                 'voters': voter_count,
@@ -786,7 +786,7 @@ def test_db():
             'message': f'Database connection failed: {str(e)}'
         }), 500
 
-# Health check for Render
+# Health check
 @app.route('/health')
 def health():
     return jsonify({'status': 'healthy', 'message': 'Arndale Voting System is running'})
@@ -795,13 +795,12 @@ def health():
 with app.app_context():
     try:
         db.create_all()
-        print("SUCCESS: Database tables created/verified successfully")
+        print("SUCCESS: PostgreSQL database tables created/verified successfully")
         
         # Check voter codes
         voters_without_codes = Voter.query.filter_by(voter_code=None).count()
         if voters_without_codes > 0:
             print(f"INFO: Found {voters_without_codes} voters without voter codes")
-            print("Run the migration script to generate voter codes for existing voters")
         else:
             print("SUCCESS: All voters have voter codes")
             
