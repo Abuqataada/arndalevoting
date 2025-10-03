@@ -8,3 +8,4 @@ gunicorn
 cloudinary==1.36.0
 python-dotenv==1.0.0
 mysql-connector-python
+python-session
