@@ -6,8 +6,6 @@ import os
 import secrets
 import string
 import json
-import mysql.connector
-from mysql.connector import Error
 import cloudinary
 import cloudinary.uploader
 import cloudinary.api
