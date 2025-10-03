@@ -2,7 +2,6 @@ from flask import Flask, render_template, request, jsonify, flash, redirect, url
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.utils import secure_filename
 from datetime import datetime, timezone
-from flask_session import Session
 import os
 import secrets
 import string
