@@ -211,7 +211,7 @@ def admin_login():
         else:
             flash('Invalid username or password', 'error')
     
-    return render_template('admin_login.html')
+    return render_template('login.html')
             
 @app.route('/home')
 def index():
