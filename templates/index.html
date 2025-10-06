@@ -667,8 +667,8 @@
                 votersList.innerHTML = data.voters.map(voter => `
                     <div class="bg-white border border-gray-200 rounded-lg p-4 flex justify-between items-center">
                         <div class="flex items-center space-x-4">
-                            ${voter.photo_filename ? 
-                                `<img src="/static/uploads/voter_photos/${voter.photo_filename}" class="w-12 h-12 rounded-full object-cover">` : 
+                            ${voter.photo_url ? 
+                                `<img src="${voter.photo_url}" class="w-12 h-12 rounded-full object-cover" alt="${voter.name}">` : 
                                 `<div class="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">👤</div>`
                             }
                             <div>
