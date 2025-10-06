@@ -615,9 +615,9 @@
                                 candidatesData.candidates.map(candidate => `
                                     <div class="bg-white border border-gray-200 rounded p-2 mb-2 flex justify-between items-center">
                                         <div class="flex items-center space-x-3">
-                                            ${candidate.photo_filename ? 
-                                                `<img src="/static/uploads/candidate_photos/${candidate.photo_filename}" class="w-10 h-10 rounded-full object-cover">` : 
-                                                `<div class="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">📷</div>`
+                                            ${candidate.photo_url ? 
+                                                `<img src="${candidate.photo_url}" class="w-16 h-16 rounded-full object-cover" alt="${candidate.name}">` : 
+                                                `<div class="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center text-xl">👤</div>`
                                             }
                                             <div>
                                                 <div class="font-medium">👤 ${candidate.name} ${candidate.grade ? `| 🏫 ${candidate.grade}` : ''}</div>
