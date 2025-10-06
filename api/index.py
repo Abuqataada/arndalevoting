@@ -42,6 +42,12 @@ cloudinary.config(
 
 db = SQLAlchemy(app)
 
+# Hardcoded admin credentials
+ADMIN_CREDENTIALS = {
+    'username': 'election-admin',
+    'password': 'arndale2025'
+}
+
 # Database Models (Updated for PostgreSQL)
 class Session(db.Model):
     __tablename__ = 'sessions'
@@ -188,7 +194,26 @@ def get_voter_stats():
     }
 
 # Routes
-@app.route('/')
+# Admin Login Routes
+@app.route('/', methods=['GET', 'POST'])
+def admin_login():
+    # If already logged in, redirect to admin dashboard
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        
+        # Check credentials
+        if (username.lower() == ADMIN_CREDENTIALS['username'] and 
+            password.lower() == ADMIN_CREDENTIALS['password']):
+            
+            flash('Login successful!', 'success')
+            return redirect(url_for('index'))
+        else:
+            flash('Invalid username or password', 'error')
+    
+    return render_template('admin_login.html')
+            
+@app.route('/home')
 def index():
     init_database()  # Initialize only when route is called
     active_session = get_active_session()
