@@ -12,9 +12,10 @@ from dotenv import load_dotenv
 # Load environment variables FIRST
 load_dotenv()
 
+# Create Flask app with explicit template and static paths
 app = Flask(__name__, 
-            template_folder='../templates', 
-            static_folder='../static')
+            template_folder=os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates'),
+            static_folder=os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static'))
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'arndale-academy-secret-key-2024')
 
 # Neon PostgreSQL Configuration - FIXED for Vercel
@@ -796,4 +797,4 @@ def health():
     return jsonify({'status': 'healthy', 'message': 'Arndale Voting System is running'})
 
 # Vercel handler - THIS MUST BE AT THE END
-handler = app
+app
