@@ -184,7 +184,13 @@
 
                         <!-- Voter Statistics -->
                         <div class="bg-white rounded-lg shadow-sm border p-6 mt-6">
-                            <h3 class="text-lg font-semibold text-gray-800 mb-4">📊 Voter Statistics</h3>
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-lg font-semibold text-gray-800">📊 Voter Statistics</h3>
+                                <button onclick="downloadVoterData()" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors flex items-center space-x-2">
+                                    <i class="fas fa-download"></i>
+                                    <span>Download Voter Data</span>
+                                </button>
+                            </div>
                             <div class="grid grid-cols-2 gap-4">
                                 <div class="stat-card bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
                                     <div class="text-2xl font-bold text-blue-600">{{ voter_stats.total }}</div>
@@ -1085,6 +1091,93 @@
                 updateStatus('Failed to create session: ' + error.message);
             }
         });
+
+        // Download voter data by class/grade
+        async function downloadVoterData() {
+            try {
+                const data = await apiCall('/api/voters');
+                const voters = data.voters;
+                
+                // Group voters by grade
+                const votersByGrade = {};
+                voters.forEach(voter => {
+                    if (!votersByGrade[voter.grade]) {
+                        votersByGrade[voter.grade] = [];
+                    }
+                    votersByGrade[voter.grade].push(voter);
+                });
+                
+                // Sort grades (YEAR 7 to YEAR 12)
+                const sortedGrades = Object.keys(votersByGrade).sort((a, b) => {
+                    const getYearNumber = (grade) => parseInt(grade.replace('YEAR ', '')) || 0;
+                    return getYearNumber(a) - getYearNumber(b);
+                });
+                
+                // Create text content
+                let textContent = 'ARNDALE ACADEMY - VOTER REGISTRATION DATA\n';
+                textContent += '============================================\n';
+                textContent += `Generated: ${new Date().toLocaleString()}\n`;
+                textContent += `Total Voters: ${voters.length}\n\n`;
+                
+                // Add data for each grade
+                sortedGrades.forEach(grade => {
+                    const gradeVoters = votersByGrade[grade];
+                    const votedCount = gradeVoters.filter(v => v.has_voted).length;
+                    const notVotedCount = gradeVoters.length - votedCount;
+                    const participationRate = ((votedCount / gradeVoters.length) * 100).toFixed(1);
+                    
+                    textContent += `\n${'='.repeat(50)}\n`;
+                    textContent += `CLASS: ${grade}\n`;
+                    textContent += `${'='.repeat(50)}\n`;
+                    textContent += `Total Students: ${gradeVoters.length}\n`;
+                    textContent += `Voted: ${votedCount} | Not Voted: ${notVotedCount} | Participation: ${participationRate}%\n\n`;
+                    
+                    // Add voter details
+                    textContent += 'STUDENT ID      | NAME                     | VOTER CODE | STATUS\n';
+                    textContent += '-'.repeat(60) + '\n';
+                    
+                    gradeVoters.forEach(voter => {
+                        const studentId = voter.student_id.padEnd(15);
+                        const name = voter.name.padEnd(25).substring(0, 25);
+                        const voterCode = voter.voter_code.padEnd(10);
+                        const status = voter.has_voted ? 'VOTED' : 'NOT VOTED';
+                        
+                        textContent += `${studentId} | ${name} | ${voterCode} | ${status}\n`;
+                    });
+                });
+                
+                // Add summary
+                textContent += `\n${'='.repeat(60)}\n`;
+                textContent += 'SUMMARY BY CLASS\n';
+                textContent += `${'='.repeat(60)}\n`;
+                
+                sortedGrades.forEach(grade => {
+                    const gradeVoters = votersByGrade[grade];
+                    const votedCount = gradeVoters.filter(v => v.has_voted).length;
+                    const participationRate = ((votedCount / gradeVoters.length) * 100).toFixed(1);
+                    
+                    textContent += `${grade.padEnd(10)}: ${gradeVoters.length.toString().padEnd(3)} students | ${votedCount.toString().padEnd(3)} voted | ${participationRate}% participation\n`;
+                });
+                
+                // Create and download file
+                const blob = new Blob([textContent], { type: 'text/plain' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                const timestamp = new Date().toISOString().split('T')[0];
+                
+                a.href = url;
+                a.download = `arndale_voters_${timestamp}.txt`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                
+                updateStatus('Voter data downloaded successfully');
+                
+            } catch (error) {
+                updateStatus('Failed to download voter data: ' + error.message);
+            }
+        }
     </script>
 </body>
 </html>
