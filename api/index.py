@@ -148,10 +148,6 @@ def init_database():
         print(f"ERROR: Database initialization failed: {e}")
         return False
 
-<<<<<<< HEAD:app.py
-
-=======
->>>>>>> ae191ec63d846ccd1fec70427e67c14375e67f30:api/index.py
 # Cloudinary Helper Functions
 def upload_to_cloudinary(file, folder):
     """Upload file to Cloudinary and return URL"""
