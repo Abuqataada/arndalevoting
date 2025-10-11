@@ -1,11 +1,9 @@
 from flask import Flask, render_template, request, jsonify, flash, redirect, url_for, session as flask_session
 from flask_sqlalchemy import SQLAlchemy
-from werkzeug.utils import secure_filename
 from datetime import datetime, timezone
 import os
 import secrets
 import string
-import json
 import cloudinary
 import cloudinary.uploader
 import cloudinary.api
@@ -14,7 +12,10 @@ from dotenv import load_dotenv
 # Load environment variables FIRST
 load_dotenv()
 
-app = Flask(__name__)
+# Create Flask app with explicit template and static paths
+app = Flask(__name__, 
+            template_folder=os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates'),
+            static_folder=os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static'))
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'arndale-academy-secret-key-2024')
 
 # Neon PostgreSQL Configuration - FIXED for Vercel
@@ -40,6 +41,12 @@ cloudinary.config(
 )
 
 db = SQLAlchemy(app)
+
+# Hardcoded admin credentials
+ADMIN_CREDENTIALS = {
+    'username': 'election-admin',
+    'password': 'arndale2025'
+}
 
 # Database Models (Updated for PostgreSQL)
 class Session(db.Model):
@@ -141,7 +148,10 @@ def init_database():
         print(f"ERROR: Database initialization failed: {e}")
         return False
 
+<<<<<<< HEAD:app.py
 
+=======
+>>>>>>> ae191ec63d846ccd1fec70427e67c14375e67f30:api/index.py
 # Cloudinary Helper Functions
 def upload_to_cloudinary(file, folder):
     """Upload file to Cloudinary and return URL"""
@@ -187,8 +197,27 @@ def get_voter_stats():
         'participation_rate': round(participation_rate, 1)
     }
 
-# Routes (your existing routes remain the same)
-@app.route('/')
+# Routes
+# Admin Login Routes
+@app.route('/', methods=['GET', 'POST'])
+def admin_login():
+    # If already logged in, redirect to admin dashboard
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        
+        # Check credentials
+        if (username.lower() == ADMIN_CREDENTIALS['username'] and 
+            password.lower() == ADMIN_CREDENTIALS['password']):
+            
+            flash('Login successful!', 'success')
+            return redirect(url_for('index'))
+        else:
+            flash('Invalid username or password', 'error')
+    
+    return render_template('login.html')
+            
+@app.route('/home')
 def index():
     init_database()  # Initialize only when route is called
     active_session = get_active_session()
@@ -765,10 +794,6 @@ def get_session_results(session_id):
     
     return jsonify(results_data)
 
-# Initialize database
-with app.app_context():
-    db.create_all()
-
 # Test database connection
 @app.route('/test-db')
 def test_db():
@@ -800,22 +825,5 @@ def test_db():
 def health():
     return jsonify({'status': 'healthy', 'message': 'Arndale Voting System is running'})
 
-# Initialize database tables
-with app.app_context():
-    try:
-        db.create_all()
-        print("SUCCESS: PostgreSQL database tables created/verified successfully")
-        
-        # Check voter codes
-        voters_without_codes = Voter.query.filter_by(voter_code=None).count()
-        if voters_without_codes > 0:
-            print(f"INFO: Found {voters_without_codes} voters without voter codes")
-        else:
-            print("SUCCESS: All voters have voter codes")
-            
-    except Exception as e:
-        print(f"ERROR: Error creating tables: {e}")
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+# Vercel handler - THIS MUST BE AT THE END
+app
