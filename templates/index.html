@@ -615,8 +615,8 @@
                                 candidatesData.candidates.map(candidate => `
                                     <div class="bg-white border border-gray-200 rounded p-2 mb-2 flex justify-between items-center">
                                         <div class="flex items-center space-x-3">
-                                            ${candidate.photo_filename ? 
-                                                `<img src="/static/uploads/candidate_photos/${candidate.photo_filename}" class="w-10 h-10 rounded-full object-cover">` : 
+                                            ${candidate.photo_url ? 
+                                                `<img src="${candidate.photo_url}" class="w-10 h-10 rounded-full object-cover">` : 
                                                 `<div class="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">📷</div>`
                                             }
                                             <div>
@@ -667,8 +667,8 @@
                 votersList.innerHTML = data.voters.map(voter => `
                     <div class="bg-white border border-gray-200 rounded-lg p-4 flex justify-between items-center">
                         <div class="flex items-center space-x-4">
-                            ${voter.photo_filename ? 
-                                `<img src="/static/uploads/voter_photos/${voter.photo_filename}" class="w-12 h-12 rounded-full object-cover">` : 
+                            ${voter.photo_url ? 
+                                `<img src="${voter.photo_url}" class="w-12 h-12 rounded-full object-cover">` : 
                                 `<div class="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">👤</div>`
                             }
                             <div>
@@ -821,8 +821,8 @@
                                             <!-- Candidate Info -->
                                             <div class="flex-1">
                                                 <div class="flex items-start space-x-4">
-                                                    ${candidate.photo_filename ? 
-                                                        `<img src="/static/uploads/candidate_photos/${candidate.photo_filename}" class="w-16 h-16 rounded-lg object-cover">` : 
+                                                    ${candidate.photo_url ? 
+                                                        `<img src="${candidate.photo_url}" class="w-16 h-16 rounded-lg object-cover">` : 
                                                         `<div class="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center text-2xl">📷</div>`
                                                     }
                                                     <div class="flex-1">
@@ -987,8 +987,8 @@
                                                         <!-- Candidate Info -->
                                                         <div class="flex-1">
                                                             <div class="flex items-start space-x-4">
-                                                                ${candidate.photo_filename ? 
-                                                                    `<img src="/static/uploads/candidate_photos/${candidate.photo_filename}" class="w-12 h-12 rounded-lg object-cover">` : 
+                                                                ${candidate.photo_url ? 
+                                                                    `<img src="${candidate.photo_url}" class="w-12 h-12 rounded-lg object-cover">` : 
                                                                     `<div class="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">📷</div>`
                                                                 }
                                                                 <div class="flex-1">

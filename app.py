@@ -17,24 +17,19 @@ load_dotenv()
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'arndale-academy-secret-key-2024')
 
-# Neon PostgreSQL Configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'voting.db')
+# Neon PostgreSQL Configuration - FIXED for Vercel
+database_url = os.environ.get('DATABASE_URL')
+if database_url and database_url.startswith('postgres://'):
+    database_url = database_url.replace('postgres://', 'postgresql://', 1)
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///voting.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_recycle': 300,
     'pool_pre_ping': True
 }
 
-app.config['UPLOAD_FOLDER'] = 'static/uploads'
+# Remove file upload configurations for Vercel (serverless doesn't support file writes)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
-app.config['CANDIDATE_PHOTOS'] = 'static/uploads/candidate_photos'
-app.config['VOTER_PHOTOS'] = 'static/uploads/voter_photos'
-
-# Create upload directories
-for directory in [app.config['UPLOAD_FOLDER'], 
-                 app.config['CANDIDATE_PHOTOS'], 
-                 app.config['VOTER_PHOTOS']]:
-    os.makedirs(directory, exist_ok=True)
 
 # Cloudinary Configuration
 cloudinary.config(
@@ -134,6 +129,19 @@ class VotingLog(db.Model):
     candidate = db.relationship('Candidate')
     voter = db.relationship('Voter')
 
+# Initialize database - ONLY when needed
+def init_database():
+    """Initialize database tables - call this from routes, not on import"""
+    try:
+        # This will create tables if they don't exist
+        db.create_all()
+        print("SUCCESS: Database tables created/verified successfully")
+        return True
+    except Exception as e:
+        print(f"ERROR: Database initialization failed: {e}")
+        return False
+
+
 # Cloudinary Helper Functions
 def upload_to_cloudinary(file, folder):
     """Upload file to Cloudinary and return URL"""
@@ -182,6 +190,7 @@ def get_voter_stats():
 # Routes (your existing routes remain the same)
 @app.route('/')
 def index():
+    init_database()  # Initialize only when route is called
     active_session = get_active_session()
     sessions = Session.query.order_by(Session.created_date.desc()).all()
     voters = Voter.query.order_by(Voter.registered_date.desc()).all()
