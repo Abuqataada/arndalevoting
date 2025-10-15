@@ -575,6 +575,15 @@ def delete_voter(voter_id):
         if voter_to_delete.photo_url:
             delete_from_cloudinary(voter_to_delete.photo_url)
         
+        if voter_to_delete.has_voted:
+            # If the voter has voted, we need to remove their vote
+            VotingLog.query.filter_by(voter_id=voter_to_delete.id).delete()
+            # Optionally, decrement vote counts for candidates they voted for
+            votes = VotingLog.query.filter_by(voter_id=voter_to_delete.id).all()
+            for vote in votes:
+                candidate = Candidate.query.get(vote.candidate_id)
+                if candidate and candidate.votes > 0:
+                    candidate.votes -= 1
         db.session.delete(voter_to_delete)
         db.session.commit()
         
