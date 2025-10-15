@@ -322,12 +322,9 @@
                         class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4">
                     <p id="passwordError" class="text-red-500 text-sm hidden">Incorrect password. Please try again.</p>
                 </div>
-                <div class="flex justify-center space-x-3 mt-4">
-                    <button id="cancelPassword" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors">
-                        Cancel
-                    </button>
-                    <button id="submitPassword" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
-                        Verify
+                <div class="flex justify-center mt-4">
+                    <button id="submitPassword" class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
+                        Verify & Continue
                     </button>
                 </div>
             </div>
@@ -443,11 +440,13 @@
             }
         });
 
-        // Close modal when clicking outside
-        document.getElementById('passwordModal').addEventListener('click', function(e) {
-            if (e.target.id === 'passwordModal') {
-                document.getElementById('passwordModal').classList.add('hidden');
-                pendingTab = null;
+        // Optional: Prevent escape key from closing modal
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && document.getElementById('passwordModal').classList.contains('hidden') === false) {
+                e.preventDefault();
+                // Optionally show a message that password is required
+                document.getElementById('passwordError').textContent = 'Password is required to access this section';
+                document.getElementById('passwordError').classList.remove('hidden');
             }
         });
 
