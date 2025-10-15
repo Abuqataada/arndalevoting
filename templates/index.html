@@ -443,14 +443,6 @@
             }
         });
 
-        // Close modal when clicking outside
-        document.getElementById('passwordModal').addEventListener('click', function(e) {
-            if (e.target.id === 'passwordModal') {
-                document.getElementById('passwordModal').classList.add('hidden');
-                pendingTab = null;
-            }
-        });
-
         // Update datetime
         function updateDateTime() {
             const now = new Date();
