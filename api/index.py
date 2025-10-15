@@ -67,6 +67,7 @@ class Position(db.Model):
     session_id = db.Column(db.Integer, db.ForeignKey('sessions.id', ondelete='CASCADE'), nullable=False)
     display_order = db.Column(db.Integer, default=0)
     description = db.Column(db.Text)
+    grade_filter = db.Column(db.String(50), nullable=True)  # e.g., "YEAR 7", "YEAR 8", or null for all grades
     
     candidates = db.relationship('Candidate', backref='position', lazy=True, cascade='all, delete-orphan')
 
@@ -332,6 +333,7 @@ def create_position():
     session_id = data.get('session_id')
     display_order = data.get('display_order', 0)
     description = data.get('description', '').strip()
+    grade_filter = data.get('grade_filter', '').strip() or None  # New field
     
     if not name or not session_id:
         return jsonify({'error': 'Position name and session are required'}), 400
@@ -350,7 +352,8 @@ def create_position():
             name=name,
             session_id=session_id,
             display_order=display_order,
-            description=description
+            description=description,
+            grade_filter=grade_filter  # Add this
         )
         db.session.add(new_position)
         db.session.commit()
@@ -362,7 +365,8 @@ def create_position():
                 'id': new_position.id,
                 'name': new_position.name,
                 'display_order': new_position.display_order,
-                'description': new_position.description
+                'description': new_position.description,
+                'grade_filter': new_position.grade_filter  # Include in response
             }
         })
     except Exception as e:
@@ -635,7 +639,21 @@ def get_voting_positions():
     if not active_session:
         return jsonify({'error': 'No active election session'}), 400
     
-    positions = Position.query.filter_by(session_id=active_session.id).order_by(Position.display_order).all()
+    # Get voter information from session
+    if 'voter_id' not in flask_session:
+        return jsonify({'error': 'Voter not verified'}), 401
+    
+    voter_id = flask_session['voter_id']
+    voter = Voter.query.get(voter_id)
+    if not voter:
+        return jsonify({'error': 'Voter not found'}), 404
+    
+    # Get positions that are either for all grades or specifically for this voter's grade
+    positions = Position.query.filter_by(session_id=active_session.id).filter(
+        (Position.grade_filter.is_(None)) |  # Positions for all grades
+        (Position.grade_filter == voter.grade)  # Positions specifically for this grade
+    ).order_by(Position.display_order).all()
+    
     positions_data = []
     
     for position in positions:
@@ -656,6 +674,7 @@ def get_voting_positions():
             'id': position.id,
             'name': position.name,
             'description': position.description,
+            'grade_filter': position.grade_filter,  # Include grade filter info
             'candidates': candidates_data
         })
     

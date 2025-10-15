@@ -439,24 +439,38 @@
                 const data = await apiCall(`/api/sessions/${sessionId}/positions`);
                 const positionManagement = document.getElementById('positionManagement');
                 
+                // In loadPositionManagement function, update the form:
                 positionManagement.innerHTML = `
                     <form id="newPositionForm" class="bg-white border border-gray-200 rounded-lg p-4 mb-4">
                         <h4 class="font-medium text-gray-700 mb-3">➕ Add New Position</h4>
                         <div class="space-y-3">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Position Name</label>
-                                <input type="text" name="name" placeholder="e.g., School President" required
-                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <input type="text" name="name" placeholder="e.g., Class Representative (YEAR 7)" required
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Grade Restriction</label>
+                                <select name="grade_filter" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="">All Grades (No Restriction)</option>
+                                    <option value="YEAR 7">YEAR 7 Only</option>
+                                    <option value="YEAR 8">YEAR 8 Only</option>
+                                    <option value="YEAR 9">YEAR 9 Only</option>
+                                    <option value="YEAR 10">YEAR 10 Only</option>
+                                    <option value="YEAR 11">YEAR 11 Only</option>
+                                    <option value="YEAR 12">YEAR 12 Only</option>
+                                </select>
+                                <p class="text-xs text-gray-500 mt-1">Select which grade can vote for this position. Leave blank for all grades.</p>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Display Order</label>
                                 <input type="number" name="display_order" placeholder="1, 2, 3..." 
-                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
                                 <textarea name="description" rows="2" placeholder="Position description..."
-                                          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
                             </div>
                             <input type="hidden" name="session_id" value="${sessionId}">
                             <button type="submit" class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700">
@@ -469,6 +483,7 @@
                             <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 flex justify-between items-center">
                                 <div>
                                     <span class="font-medium">🔢 ${position.display_order}. 🎭 ${position.name}</span>
+                                    ${position.grade_filter ? `<span class="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">${position.grade_filter} Only</span>` : ''}
                                     ${position.description ? `<span class="text-gray-600 ml-2">- ${position.description}</span>` : ''}
                                     <span class="ml-2 text-sm text-gray-500">👥 ${position.candidate_count} candidates</span>
                                 </div>
@@ -479,7 +494,6 @@
                         `).join('')}
                     </div>
                 `;
-                
                 // Add form submit handler
                 document.getElementById('newPositionForm').addEventListener('submit', async (e) => {
                     e.preventDefault();
