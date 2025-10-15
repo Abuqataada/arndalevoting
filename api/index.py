@@ -32,6 +32,10 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
 # Remove file upload configurations for Vercel (serverless doesn't support file writes)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'kjhgvmjgkgjhkjhrkjhrhrhkhtrhj9875609857&*##&*%#)%#KHVNDHG')
+app.config['SESSION_TYPE'] = 'filesystem'
+app.config['PERMANENT_SESSION_LIFETIME'] = 3600  # 1 hour session timeout
+
 # Cloudinary Configuration
 cloudinary.config(
     cloud_name=os.environ.get('CLOUDINARY_CLOUD_NAME'),
@@ -194,28 +198,21 @@ def get_voter_stats():
         'participation_rate': round(participation_rate, 1)
     }
 
+# Helper function for authentication check
+def require_admin_login():
+    """Redirect to login if not authenticated"""
+    if 'admin_logged_in' not in flask_session:
+        return redirect(url_for('admin_login'))
+
+
 # Routes
 # Admin Login Routes
-@app.route('/', methods=['GET', 'POST'])
-def admin_login():
-    # If already logged in, redirect to admin dashboard
-    if request.method == 'POST':
-        username = request.form.get('username', '').strip()
-        password = request.form.get('password', '').strip()
-        
-        # Check credentials
-        if (username.lower() == ADMIN_CREDENTIALS['username'] and 
-            password.lower() == ADMIN_CREDENTIALS['password']):
-            
-            flash('Login successful!', 'success')
-            return redirect(url_for('index'))
-        else:
-            flash('Invalid username or password', 'error')
-    
-    return render_template('login.html')
-            
 @app.route('/home')
 def index():
+    # Check if user is logged in
+    if 'admin_logged_in' not in flask_session:
+        return redirect(url_for('admin_login'))
+    
     init_database()  # Initialize only when route is called
     active_session = get_active_session()
     sessions = Session.query.order_by(Session.created_date.desc()).all()
@@ -227,6 +224,47 @@ def index():
                          sessions=sessions,
                          voters=voters,
                          voter_stats=voter_stats)
+
+# Update the admin login route to set session
+@app.route('/', methods=['GET', 'POST'])
+def admin_login():
+    # If already logged in, redirect to admin dashboard
+    if 'admin_logged_in' in flask_session:
+        return redirect(url_for('index'))
+    
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        
+        # Check credentials
+        if (username.lower() == ADMIN_CREDENTIALS['username'] and 
+            password.lower() == ADMIN_CREDENTIALS['password']):
+            
+            # Set session variable
+            flask_session['admin_logged_in'] = True
+            flask_session['login_time'] = datetime.now(timezone.utc).isoformat()
+            
+            flash('Login successful!', 'success')
+            return redirect(url_for('index'))
+        else:
+            flash('Invalid username or password', 'error')
+    
+    return render_template('login.html')
+
+# Add logout route
+@app.route('/logout')
+def logout():
+    flask_session.clear()
+    flash('You have been logged out successfully', 'success')
+    return redirect(url_for('admin_login'))
+
+# Add session check API endpoint
+@app.route('/api/admin/check-session')
+def check_admin_session():
+    if 'admin_logged_in' in flask_session:
+        return jsonify({'logged_in': True})
+    return jsonify({'logged_in': False})
+
 
 # Session Management API
 @app.route('/api/sessions', methods=['GET', 'POST'])

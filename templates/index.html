@@ -37,6 +37,12 @@
                     <div id="syncStatus" class="bg-green-50 border border-green-200 rounded-lg px-4 py-2">
                         <span class="text-green-700 font-medium">Auto-sync: Active</span>
                     </div>
+
+                    <!-- Add logout button -->
+                    <button onclick="logout()" class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors flex items-center space-x-2">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span>Logout</span>
+                    </button>
                     <div class="text-right">
                         <div id="statusBar" class="text-gray-600 text-sm">Ready</div>
                     </div>
@@ -1322,6 +1328,48 @@
                 updateStatus('Failed to download voter data: ' + error.message);
             }
         }
+        // Logout function
+        async function logout() {
+            try {
+                const response = await fetch('/logout');
+                if (response.ok) {
+                    window.location.href = '/';
+                } else {
+                    throw new Error('Logout failed');
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+                // Force redirect anyway
+                window.location.href = '/';
+            }
+        }
+
+        // Check if user is logged in on page load
+        async function checkLoginStatus() {
+            try {
+                const response = await fetch('/api/admin/check-session');
+                const data = await response.json();
+                
+                if (!data.logged_in) {
+                    // Redirect to login page if not logged in
+                    window.location.href = '/';
+                }
+            } catch (error) {
+                console.error('Login check failed:', error);
+                window.location.href = '/';
+            }
+        }
+
+        // Update your DOMContentLoaded event listener
+        document.addEventListener('DOMContentLoaded', function() {
+            checkLoginStatus(); // Check login status first
+            
+            // Only load data if user is logged in
+            loadSessions();
+            loadVoters();
+            loadSessionsForResults();
+            updateStatus('Application loaded successfully');
+        });
     </script>
 </body>
 </html>
