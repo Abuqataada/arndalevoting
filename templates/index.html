@@ -866,13 +866,15 @@
 
         // Voter registration form
         document.getElementById('voterRegistrationForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
+            e.preventDefault(); // This prevents the page reload
+            
             const formData = new FormData(e.target);
             
             try {
                 const response = await fetch('/api/voters', {
                     method: 'POST',
                     body: formData
+                    // Don't set Content-Type header when using FormData - let browser set it automatically
                 });
                 
                 const data = await response.json();
@@ -886,6 +888,7 @@
                 loadVoters();
             } catch (error) {
                 updateStatus('Failed to register voter: ' + error.message);
+                alert('Failed to register voter: ' + error.message);
             }
         });
 
