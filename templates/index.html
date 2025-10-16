@@ -17,11 +17,6 @@
         .stat-card:hover { transform: translateY(-2px); }
         .candidate-card { transition: all 0.3s; }
         .candidate-card:hover { transform: translateY(-2px); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1); }
-
-        /* Password Modal Styles */
-        #passwordModal {
-            transition: opacity 0.3s ease;
-        }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -70,10 +65,10 @@
             <div class="border-b">
                 <nav class="flex -mb-px">
                     <button class="tab-button active py-4 px-6 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors" data-tab="administration">
-                        <i class="fas fa-cog mr-2"></i>Administration <i class="fas fa-lock ml-1 text-xs"></i>
+                        <i class="fas fa-cog mr-2"></i>Administration
                     </button>
                     <button class="tab-button py-4 px-6 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors" data-tab="voter-registration">
-                        <i class="fas fa-user-plus mr-2"></i>Voter Registration <i class="fas fa-lock ml-1 text-xs"></i>
+                        <i class="fas fa-user-plus mr-2"></i>Voter Registration
                     </button>
                     <button class="tab-button py-4 px-6 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors" data-tab="voting-station">
                         <i class="fas fa-vote-yea mr-2"></i>Voting Station
@@ -306,31 +301,6 @@
         </div>
     </main>
 
-    <!-- Password Modal -->
-    <div id="passwordModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
-        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div class="mt-3 text-center">
-                <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100">
-                    <i class="fas fa-lock text-blue-600"></i>
-                </div>
-                <h3 class="text-lg font-medium text-gray-900 mt-2">Admin Authentication Required</h3>
-                <div class="mt-2 px-7 py-3">
-                    <p class="text-sm text-gray-500 mb-4">
-                        Please enter the admin password to access <span id="tabName" class="font-semibold"></span>
-                    </p>
-                    <input type="password" id="adminPassword" placeholder="Enter admin password" 
-                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4">
-                    <p id="passwordError" class="text-red-500 text-sm hidden">Incorrect password. Please try again.</p>
-                </div>
-                <div class="flex justify-center space-x-3 mt-4">
-                    <button id="submitPassword" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
-                        Verify
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- JavaScript -->
     <script>
         // Tab functionality
@@ -350,94 +320,6 @@
                 if (tabId === 'voter-registration') loadVoters();
                 if (tabId === 'election-results') loadSessionsForResults();
             });
-        });
-
-        // Password protection for sensitive tabs
-        let pendingTab = null;
-        const ADMIN_PASSWORD = 'arndale2025'; // Same as your backend password
-
-        // Password protection function
-        function requirePassword(tabId, tabName) {
-            pendingTab = tabId;
-            document.getElementById('tabName').textContent = tabName;
-            document.getElementById('adminPassword').value = '';
-            document.getElementById('passwordError').classList.add('hidden');
-            document.getElementById('passwordModal').classList.remove('hidden');
-            document.getElementById('adminPassword').focus();
-        }
-
-        // Password verification
-        function verifyPassword() {
-            const password = document.getElementById('adminPassword').value;
-            
-            if (password === ADMIN_PASSWORD) {
-                // Correct password - switch to the pending tab
-                document.getElementById('passwordModal').classList.add('hidden');
-                
-                // Remove active class from all tabs
-                document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-                
-                // Add active class to the pending tab
-                const tabButton = document.querySelector(`.tab-button[data-tab="${pendingTab}"]`);
-                const tabContent = document.getElementById(pendingTab);
-                
-                if (tabButton && tabContent) {
-                    tabButton.classList.add('active');
-                    tabContent.classList.add('active');
-                    
-                    // Load tab-specific data
-                    if (pendingTab === 'administration') loadSessions();
-                    if (pendingTab === 'voter-registration') loadVoters();
-                }
-                
-                pendingTab = null;
-                updateStatus(`Access granted to ${document.getElementById('tabName').textContent}`);
-            } else {
-                // Incorrect password
-                document.getElementById('passwordError').classList.remove('hidden');
-                document.getElementById('adminPassword').value = '';
-                document.getElementById('adminPassword').focus();
-                updateStatus('Incorrect admin password entered');
-            }
-        }
-
-        // Update the tab click event handler
-        document.querySelectorAll('.tab-button').forEach(button => {
-            button.addEventListener('click', () => {
-                const tabId = button.getAttribute('data-tab');
-                const tabName = button.textContent.trim();
-                
-                // Check if password is required for this tab
-                if (tabId === 'administration' || tabId === 'voter-registration') {
-                    requirePassword(tabId, tabName);
-                } else {
-                    // No password required for these tabs
-                    document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-                    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-                    
-                    button.classList.add('active');
-                    document.getElementById(tabId).classList.add('active');
-                    
-                    // Load tab-specific data
-                    if (tabId === 'election-results') loadSessionsForResults();
-                }
-            });
-        });
-
-        // Add event listeners for the password modal
-        document.getElementById('submitPassword').addEventListener('click', verifyPassword);
-        document.getElementById('cancelPassword').addEventListener('click', function() {
-            document.getElementById('passwordModal').classList.add('hidden');
-            pendingTab = null;
-            updateStatus('Admin authentication cancelled');
-        });
-
-        // Allow pressing Enter in password field
-        document.getElementById('adminPassword').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                verifyPassword();
-            }
         });
 
         // Update datetime
@@ -557,38 +439,24 @@
                 const data = await apiCall(`/api/sessions/${sessionId}/positions`);
                 const positionManagement = document.getElementById('positionManagement');
                 
-                // In loadPositionManagement function, update the form:
                 positionManagement.innerHTML = `
                     <form id="newPositionForm" class="bg-white border border-gray-200 rounded-lg p-4 mb-4">
                         <h4 class="font-medium text-gray-700 mb-3">➕ Add New Position</h4>
                         <div class="space-y-3">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Position Name</label>
-                                <input type="text" name="name" placeholder="e.g., Class Representative (YEAR 7)" required
-                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Grade Restriction</label>
-                                <select name="grade_filter" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                    <option value="">All Grades (No Restriction)</option>
-                                    <option value="YEAR 7">YEAR 7 Only</option>
-                                    <option value="YEAR 8">YEAR 8 Only</option>
-                                    <option value="YEAR 9">YEAR 9 Only</option>
-                                    <option value="YEAR 10">YEAR 10 Only</option>
-                                    <option value="YEAR 11">YEAR 11 Only</option>
-                                    <option value="YEAR 12">YEAR 12 Only</option>
-                                </select>
-                                <p class="text-xs text-gray-500 mt-1">Select which grade can vote for this position. Leave blank for all grades.</p>
+                                <input type="text" name="name" placeholder="e.g., School President" required
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Display Order</label>
                                 <input type="number" name="display_order" placeholder="1, 2, 3..." 
-                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
                                 <textarea name="description" rows="2" placeholder="Position description..."
-                                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                                          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
                             </div>
                             <input type="hidden" name="session_id" value="${sessionId}">
                             <button type="submit" class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700">
@@ -601,7 +469,6 @@
                             <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 flex justify-between items-center">
                                 <div>
                                     <span class="font-medium">🔢 ${position.display_order}. 🎭 ${position.name}</span>
-                                    ${position.grade_filter ? `<span class="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">${position.grade_filter} Only</span>` : ''}
                                     ${position.description ? `<span class="text-gray-600 ml-2">- ${position.description}</span>` : ''}
                                     <span class="ml-2 text-sm text-gray-500">👥 ${position.candidate_count} candidates</span>
                                 </div>
@@ -612,6 +479,7 @@
                         `).join('')}
                     </div>
                 `;
+                
                 // Add form submit handler
                 document.getElementById('newPositionForm').addEventListener('submit', async (e) => {
                     e.preventDefault();
@@ -1266,7 +1134,6 @@
                     textContent += `Total Students: ${gradeVoters.length}\n`;
                     textContent += `Voted: ${votedCount} | Not Voted: ${notVotedCount} | Participation: ${participationRate}%\n\n`;
                     
-                    // Add voter details
                     textContent += 'STUDENT ID      | NAME                     | VOTER CODE | STATUS\n';
                     textContent += '-'.repeat(60) + '\n';
                     
