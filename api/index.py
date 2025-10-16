@@ -565,7 +565,7 @@ def migrate_students():
                 # Reset voting status for the new session
                 student.has_voted = False
                 # You might want to generate a new voter code or keep the same
-                # student.voter_code = Voter.generate_voter_code()  # Uncomment to generate new codes
+                student.voter_code = Voter.generate_voter_code()  # Uncomment to generate new codes
                 migrated_count += 1
             else:
                 errors.append(f"Student with ID {student_id} not found")
