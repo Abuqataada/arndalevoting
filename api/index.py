@@ -495,6 +495,156 @@ def create_candidate():
         db.session.rollback()
         return jsonify({'error': f'Failed to create candidate: {str(e)}'}), 500
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Migration API endpoints
+@app.route('/api/migration/students')
+def get_students_by_grade():
+    """Get students filtered by grade for migration"""
+    grade = request.args.get('grade', '').strip()
+    
+    if not grade:
+        return jsonify({'error': 'Grade parameter is required'}), 400
+    
+    students = Voter.query.filter_by(grade=grade).order_by(Voter.name).all()
+    
+    students_data = []
+    for student in students:
+        students_data.append({
+            'id': student.id,
+            'name': student.name,
+            'grade': student.grade,
+            'student_id': student.student_id,
+            'has_voted': student.has_voted,
+            'voter_code': student.voter_code
+        })
+    
+    return jsonify({
+        'students': students_data,
+        'total': len(students_data),
+        'voted_count': len([s for s in students_data if s['has_voted']]),
+        'not_voted_count': len([s for s in students_data if not s['has_voted']])
+    })
+
+@app.route('/api/migration/migrate-students', methods=['POST'])
+def migrate_students():
+    """Migrate students to a new session"""
+    data = request.get_json()
+    student_ids = data.get('student_ids', [])
+    target_session_id = data.get('target_session_id')
+    
+    if not student_ids or not target_session_id:
+        return jsonify({'error': 'Student IDs and target session ID are required'}), 400
+    
+    target_session = Session.query.get(target_session_id)
+    if not target_session:
+        return jsonify({'error': 'Target session not found'}), 404
+    
+    try:
+        migrated_count = 0
+        errors = []
+        
+        for student_id in student_ids:
+            student = Voter.query.get(student_id)
+            if student:
+                # Reset voting status for the new session
+                student.has_voted = False
+                # You might want to generate a new voter code or keep the same
+                # student.voter_code = Voter.generate_voter_code()  # Uncomment to generate new codes
+                migrated_count += 1
+            else:
+                errors.append(f"Student with ID {student_id} not found")
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Successfully migrated {migrated_count} students to {target_session.name}',
+            'migrated_count': migrated_count,
+            'errors': errors
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to migrate students: {str(e)}'}), 500
+
+@app.route('/api/migration/create-year-position', methods=['POST'])
+def create_year_position():
+    """Create a Class Representative position for a specific year"""
+    data = request.get_json()
+    session_id = data.get('session_id')
+    year = data.get('year')
+    
+    if not session_id or not year:
+        return jsonify({'error': 'Session ID and year are required'}), 400
+    
+    session = Session.query.get(session_id)
+    if not session:
+        return jsonify({'error': 'Session not found'}), 404
+    
+    try:
+        # Check if position already exists
+        existing_position = Position.query.filter_by(
+            name=f"Class Representative ({year})",
+            session_id=session_id
+        ).first()
+        
+        if existing_position:
+            return jsonify({'error': f'Position for {year} already exists in this session'}), 400
+        
+        # Create new position
+        new_position = Position(
+            name=f"Class Representative ({year})",
+            session_id=session_id,
+            grade_filter=year,  # Restrict to this year only
+            display_order=Position.query.filter_by(session_id=session_id).count() + 1,
+            description=f"Class Representative election for {year} students"
+        )
+        
+        db.session.add(new_position)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Class Representative position for {year} created successfully',
+            'position': {
+                'id': new_position.id,
+                'name': new_position.name,
+                'grade_filter': new_position.grade_filter
+            }
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to create position: {str(e)}'}), 500
+    
+
+
+
+
+
+
+
+
+
+
+
+    
 @app.route('/api/positions/<int:position_id>/candidates')
 def get_position_candidates(position_id):
     candidates = Candidate.query.filter_by(position_id=position_id).order_by(Candidate.name).all()
@@ -712,7 +862,7 @@ def get_voting_positions():
             'id': position.id,
             'name': position.name,
             'description': position.description,
-            'grade_filter': position.grade_filter,  # Include grade filter info
+            'grade_filter': position.grade_filter,
             'candidates': candidates_data
         })
     

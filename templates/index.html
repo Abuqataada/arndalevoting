@@ -76,6 +76,9 @@
                     <button class="tab-button py-4 px-6 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors" data-tab="election-results">
                         <i class="fas fa-chart-bar mr-2"></i>Election Results
                     </button>
+                    <button class="tab-button py-4 px-6 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors" data-tab="student-migration">
+    <i class="fas fa-exchange-alt mr-2"></i>Student Migration <i class="fas fa-lock ml-1 text-xs"></i>
+</button>
                 </nav>
             </div>
         </div>
@@ -298,11 +301,308 @@
                     </div>
                 </div>
             </div>
+
+            <div id="student-migration" class="tab-content">
+    <div class="bg-white rounded-lg shadow-sm border p-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-4">🔄 Student Migration Tool</h3>
+        
+        <!-- Migration Controls -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <!-- Student Selection -->
+            <div class="bg-gray-50 rounded-lg p-4">
+                <h4 class="font-medium text-gray-700 mb-3">📋 Select Students to Migrate</h4>
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Select Grade/Year</label>
+                        <select id="migrationGradeSelect" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="YEAR 7">YEAR 7</option>
+                            <option value="YEAR 8">YEAR 8</option>
+                            <option value="YEAR 9" selected>YEAR 9</option>
+                            <option value="YEAR 10">YEAR 10</option>
+                            <option value="YEAR 11">YEAR 11</option>
+                            <option value="YEAR 12">YEAR 12</option>
+                        </select>
+                    </div>
+                    <button onclick="loadStudentsForMigration()" class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors">
+                        📊 Load Students
+                    </button>
+                </div>
+            </div>
+
+            <!-- Session Selection -->
+            <div class="bg-gray-50 rounded-lg p-4">
+                <h4 class="font-medium text-gray-700 mb-3">🎯 Target Session</h4>
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Select Target Session</label>
+                        <select id="targetSessionSelect" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <!-- Sessions will be loaded here -->
+                        </select>
+                    </div>
+                    <button onclick="createYearPosition()" class="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 transition-colors">
+                        🎭 Create Year Position
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Students List -->
+        <div class="bg-white rounded-lg shadow-sm border">
+            <div class="border-b p-4">
+                <div class="flex justify-between items-center">
+                    <h4 class="font-medium text-gray-700">👥 Students List</h4>
+                    <div class="flex space-x-2">
+                        <button onclick="selectAllStudents()" class="bg-gray-600 text-white px-3 py-1 text-sm rounded hover:bg-gray-700">
+                            Select All
+                        </button>
+                        <button onclick="deselectAllStudents()" class="bg-gray-600 text-white px-3 py-1 text-sm rounded hover:bg-gray-700">
+                            Deselect All
+                        </button>
+                        <button onclick="migrateSelectedStudents()" class="bg-blue-600 text-white px-3 py-1 text-sm rounded hover:bg-blue-700">
+                            🚀 Migrate Selected
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div id="migrationStudentsList" class="p-4">
+                <div class="text-center py-8 text-gray-500">
+                    <p>Select a grade and click "Load Students" to begin</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Migration Statistics -->
+        <div id="migrationStats" class="bg-gray-50 rounded-lg p-4 mt-4 hidden">
+            <h4 class="font-medium text-gray-700 mb-2">📊 Migration Statistics</h4>
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-white border border-gray-200 rounded-lg p-3 text-center">
+                    <div class="text-xl font-bold text-blue-600" id="totalStudents">0</div>
+                    <div class="text-sm text-gray-600">Total Students</div>
+                </div>
+                <div class="bg-white border border-gray-200 rounded-lg p-3 text-center">
+                    <div class="text-xl font-bold text-green-600" id="selectedStudents">0</div>
+                    <div class="text-sm text-gray-600">Selected</div>
+                </div>
+                <div class="bg-white border border-gray-200 rounded-lg p-3 text-center">
+                    <div class="text-xl font-bold text-orange-600" id="votedStudents">0</div>
+                    <div class="text-sm text-gray-600">Already Voted</div>
+                </div>
+                <div class="bg-white border border-gray-200 rounded-lg p-3 text-center">
+                    <div class="text-xl font-bold text-purple-600" id="notVotedStudents">0</div>
+                    <div class="text-sm text-gray-600">Not Voted</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
         </div>
     </main>
 
     <!-- JavaScript -->
     <script>
+
+
+
+
+// Migration functionality
+let migrationStudents = [];
+
+// Load sessions for migration target
+async function loadSessionsForMigration() {
+    try {
+        const data = await apiCall('/api/sessions');
+        const select = document.getElementById('targetSessionSelect');
+        
+        select.innerHTML = data.sessions.map(session => 
+            `<option value="${session.id}">${session.name} (${session.academic_year})</option>`
+        ).join('');
+        
+    } catch (error) {
+        updateStatus('Failed to load sessions for migration');
+    }
+}
+
+// Load students for migration
+async function loadStudentsForMigration() {
+    const grade = document.getElementById('migrationGradeSelect').value;
+    
+    try {
+        const data = await apiCall(`/api/migration/students?grade=${encodeURIComponent(grade)}`);
+        migrationStudents = data.students;
+        
+        const studentsList = document.getElementById('migrationStudentsList');
+        studentsList.innerHTML = `
+            <div class="space-y-2 max-h-96 overflow-y-auto">
+                ${migrationStudents.map(student => `
+                    <div class="bg-white border border-gray-200 rounded-lg p-3 flex items-center justify-between">
+                        <div class="flex items-center space-x-3">
+                            <input type="checkbox" id="student-${student.id}" 
+                                   value="${student.id}" 
+                                   class="student-checkbox rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                   onchange="updateMigrationStats()"
+                                   ${student.has_voted ? 'disabled' : ''}>
+                            <div>
+                                <div class="font-medium">👤 ${student.name}</div>
+                                <div class="text-sm text-gray-600">
+                                    🎫 ${student.student_id} | 🏫 ${student.grade}
+                                    <span class="ml-2 ${student.has_voted ? 'text-green-600' : 'text-orange-600'}">
+                                        ${student.has_voted ? '✅ Voted' : '⏳ Not Voted'}
+                                    </span>
+                                </div>
+                                <div class="text-sm text-purple-600">🔑 ${student.voter_code}</div>
+                            </div>
+                        </div>
+                        ${student.has_voted ? 
+                            '<span class="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">Already Voted</span>' : 
+                            ''
+                        }
+                    </div>
+                `).join('')}
+            </div>
+        `;
+        
+        // Update statistics
+        document.getElementById('migrationStats').classList.remove('hidden');
+        updateMigrationStats();
+        
+        updateStatus(`Loaded ${data.total} students from ${grade}`);
+        
+    } catch (error) {
+        updateStatus('Failed to load students: ' + error.message);
+    }
+}
+
+// Update migration statistics
+function updateMigrationStats() {
+    const checkboxes = document.querySelectorAll('.student-checkbox:not(:disabled)');
+    const selected = document.querySelectorAll('.student-checkbox:not(:disabled):checked');
+    const votedCount = migrationStudents.filter(s => s.has_voted).length;
+    
+    document.getElementById('totalStudents').textContent = migrationStudents.length;
+    document.getElementById('selectedStudents').textContent = selected.length;
+    document.getElementById('votedStudents').textContent = votedCount;
+    document.getElementById('notVotedStudents').textContent = migrationStudents.length - votedCount;
+}
+
+// Select all students
+function selectAllStudents() {
+    document.querySelectorAll('.student-checkbox:not(:disabled)').forEach(checkbox => {
+        checkbox.checked = true;
+    });
+    updateMigrationStats();
+}
+
+// Deselect all students
+function deselectAllStudents() {
+    document.querySelectorAll('.student-checkbox').forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    updateMigrationStats();
+}
+
+// Migrate selected students
+async function migrateSelectedStudents() {
+    const selectedStudents = Array.from(document.querySelectorAll('.student-checkbox:checked'))
+        .map(checkbox => checkbox.value);
+    
+    const targetSessionId = document.getElementById('targetSessionSelect').value;
+    
+    if (selectedStudents.length === 0) {
+        alert('Please select at least one student to migrate');
+        return;
+    }
+    
+    if (!targetSessionId) {
+        alert('Please select a target session');
+        return;
+    }
+    
+    if (!confirm(`Are you sure you want to migrate ${selectedStudents.length} students to the selected session? This will reset their voting status.`)) {
+        return;
+    }
+    
+    try {
+        const data = await apiCall('/api/migration/migrate-students', {
+            method: 'POST',
+            body: JSON.stringify({
+                student_ids: selectedStudents,
+                target_session_id: targetSessionId
+            })
+        });
+        
+        updateStatus(data.message);
+        alert(`✅ ${data.message}\n\nMigrated: ${data.migrated_count} students${data.errors.length ? `\nErrors: ${data.errors.join(', ')}` : ''}`);
+        
+        // Reload the students list
+        loadStudentsForMigration();
+        
+    } catch (error) {
+        updateStatus('Migration failed: ' + error.message);
+        alert('Migration failed: ' + error.message);
+    }
+}
+
+// Create year-specific position
+async function createYearPosition() {
+    const targetSessionId = document.getElementById('targetSessionSelect').value;
+    const grade = document.getElementById('migrationGradeSelect').value;
+    
+    if (!targetSessionId) {
+        alert('Please select a target session first');
+        return;
+    }
+    
+    try {
+        const data = await apiCall('/api/migration/create-year-position', {
+            method: 'POST',
+            body: JSON.stringify({
+                session_id: targetSessionId,
+                year: grade
+            })
+        });
+        
+        updateStatus(data.message);
+        alert(`✅ ${data.message}`);
+        
+    } catch (error) {
+        updateStatus('Failed to create position: ' + error.message);
+        alert('Failed to create position: ' + error.message);
+    }
+}
+
+// Update tab click handler to include migration tab
+document.querySelectorAll('.tab-button').forEach(button => {
+    button.addEventListener('click', () => {
+        const tabId = button.getAttribute('data-tab');
+        const tabName = button.textContent.trim();
+        
+        // Check if password is required for this tab
+        if (tabId === 'administration' || tabId === 'voter-registration' || tabId === 'student-migration') {
+            requirePassword(tabId, tabName);
+        } else {
+            // No password required for these tabs
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            button.classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+            
+            // Load tab-specific data
+            if (tabId === 'election-results') loadSessionsForResults();
+        }
+    });
+});
+
+// Update initialization to load migration data
+document.addEventListener('DOMContentLoaded', function() {
+    checkLoginStatus();
+    loadSessions();
+    loadVoters();
+    loadSessionsForResults();
+    loadSessionsForMigration(); // Add this line
+    updateStatus('Application loaded successfully');
+});
+
         // Tab functionality
         document.querySelectorAll('.tab-button').forEach(button => {
             button.addEventListener('click', () => {
