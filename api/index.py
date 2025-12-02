@@ -885,6 +885,7 @@ def get_voting_positions():
             'name': position.name,
             'description': position.description,
             'grade_filter': position.grade_filter,
+            'voting_type': position.voting_type,  # ADD THIS LINE - it's the missing field
             'candidates': candidates_data
         })
     
