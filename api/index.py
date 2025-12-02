@@ -8,6 +8,7 @@ import cloudinary
 import cloudinary.uploader
 import cloudinary.api
 from dotenv import load_dotenv
+from sqlalchemy import text
 
 # Load environment variables FIRST
 load_dotenv()
@@ -19,10 +20,10 @@ app = Flask(__name__,
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'arndale-academy-secret-key-2024')
 
 # Neon PostgreSQL Configuration - FIXED for Vercel
-database_url = os.environ.get('DATABASE_URL')
+database_url = os.environ.get('DATABASE_URL' or 'sqlite:///voting_system.db')
 if database_url and database_url.startswith('postgres://'):
     database_url = database_url.replace('postgres://', 'postgresql://', 1)
-app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///voting.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///voting_system.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_recycle': 300,
@@ -64,6 +65,7 @@ class Session(db.Model):
     
     positions = db.relationship('Position', backref='session', lazy=True, cascade='all, delete-orphan')
 
+# In the Position model, add this field
 class Position(db.Model):
     __tablename__ = 'positions'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -71,7 +73,8 @@ class Position(db.Model):
     session_id = db.Column(db.Integer, db.ForeignKey('sessions.id', ondelete='CASCADE'), nullable=False)
     display_order = db.Column(db.Integer, default=0)
     description = db.Column(db.Text)
-    grade_filter = db.Column(db.String(50), nullable=True)  # e.g., "YEAR 7", "YEAR 8", or null for all grades
+    grade_filter = db.Column(db.String(50), nullable=True)
+    voting_type = db.Column(db.String(20), default='single')  # 'single' or 'double' (for two choices)
     
     candidates = db.relationship('Candidate', backref='position', lazy=True, cascade='all, delete-orphan')
 
@@ -135,6 +138,22 @@ class VotingLog(db.Model):
     candidate_id = db.Column(db.Integer, db.ForeignKey('candidates.id', ondelete='CASCADE'), nullable=False)
     voter_id = db.Column(db.Integer, db.ForeignKey('voters.id', ondelete='CASCADE'), nullable=False)
     vote_timestamp = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    
+    session = db.relationship('Session')
+    position = db.relationship('Position')
+    candidate = db.relationship('Candidate')
+    voter = db.relationship('Voter')
+
+# Add this class after the VotingLog model
+class MultiVotingLog(db.Model):
+    __tablename__ = 'multi_voting_log'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    session_id = db.Column(db.Integer, db.ForeignKey('sessions.id', ondelete='CASCADE'), nullable=False)
+    position_id = db.Column(db.Integer, db.ForeignKey('positions.id', ondelete='CASCADE'), nullable=False)
+    candidate_id = db.Column(db.Integer, db.ForeignKey('candidates.id', ondelete='CASCADE'), nullable=False)
+    voter_id = db.Column(db.Integer, db.ForeignKey('voters.id', ondelete='CASCADE'), nullable=False)
+    vote_timestamp = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    vote_order = db.Column(db.Integer, nullable=False)  # 1 for first choice, 2 for second choice
     
     session = db.relationship('Session')
     position = db.relationship('Position')
@@ -371,7 +390,8 @@ def create_position():
     session_id = data.get('session_id')
     display_order = data.get('display_order', 0)
     description = data.get('description', '').strip()
-    grade_filter = data.get('grade_filter', '').strip() or None  # New field
+    grade_filter = data.get('grade_filter', '').strip() or None
+    voting_type = data.get('voting_type', 'single')  # New field
     
     if not name or not session_id:
         return jsonify({'error': 'Position name and session are required'}), 400
@@ -391,7 +411,8 @@ def create_position():
             session_id=session_id,
             display_order=display_order,
             description=description,
-            grade_filter=grade_filter  # Add this
+            grade_filter=grade_filter,
+            voting_type=voting_type  # Add this
         )
         db.session.add(new_position)
         db.session.commit()
@@ -404,7 +425,8 @@ def create_position():
                 'name': new_position.name,
                 'display_order': new_position.display_order,
                 'description': new_position.description,
-                'grade_filter': new_position.grade_filter  # Include in response
+                'grade_filter': new_position.grade_filter,
+                'voting_type': new_position.voting_type  # Include in response
             }
         })
     except Exception as e:
@@ -922,6 +944,83 @@ def cast_vote():
         db.session.rollback()
         return jsonify({'error': f'Failed to cast vote: {str(e)}'}), 500
 
+# Add this new API endpoint for casting two votes
+@app.route('/api/voting/vote-double', methods=['POST'])
+def cast_double_vote():
+    data = request.get_json()
+    position_id = data.get('position_id')
+    first_choice_id = data.get('first_choice_id')
+    second_choice_id = data.get('second_choice_id')
+    
+    if 'voter_id' not in flask_session:
+        return jsonify({'error': 'Voter not verified'}), 401
+    
+    voter_id = flask_session['voter_id']
+    active_session = get_active_session()
+    
+    if not active_session or not position_id or not first_choice_id or not second_choice_id:
+        return jsonify({'error': 'Invalid vote data'}), 400
+    
+    if first_choice_id == second_choice_id:
+        return jsonify({'error': 'First and second choice cannot be the same'}), 400
+    
+    try:
+        # Check if voter has already voted for this position
+        existing_vote = MultiVotingLog.query.filter_by(
+            session_id=active_session.id,
+            position_id=position_id,
+            voter_id=voter_id
+        ).first()
+        
+        if existing_vote:
+            return jsonify({'error': 'You have already voted for this position'}), 400
+        
+        # Record first choice vote
+        first_candidate = Candidate.query.get(first_choice_id)
+        if not first_candidate:
+            return jsonify({'error': 'First choice candidate not found'}), 404
+        
+        first_candidate.votes += 1
+        
+        # Create first choice voting log entry
+        first_vote = MultiVotingLog(
+            session_id=active_session.id,
+            position_id=position_id,
+            candidate_id=first_choice_id,
+            voter_id=voter_id,
+            vote_order=1,
+            vote_timestamp=datetime.now(timezone.utc)
+        )
+        db.session.add(first_vote)
+        
+        # Record second choice vote
+        second_candidate = Candidate.query.get(second_choice_id)
+        if not second_candidate:
+            return jsonify({'error': 'Second choice candidate not found'}), 404
+        
+        second_candidate.votes += 1
+        
+        # Create second choice voting log entry
+        second_vote = MultiVotingLog(
+            session_id=active_session.id,
+            position_id=position_id,
+            candidate_id=second_choice_id,
+            voter_id=voter_id,
+            vote_order=2,
+            vote_timestamp=datetime.now(timezone.utc)
+        )
+        db.session.add(second_vote)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Votes cast successfully for {first_candidate.name} (1st) and {second_candidate.name} (2nd)'
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to cast votes: {str(e)}'}), 500
+    
 @app.route('/api/voting/complete', methods=['POST'])
 def complete_voting():
     if 'voter_id' not in flask_session:
@@ -947,6 +1046,127 @@ def complete_voting():
         db.session.rollback()
         return jsonify({'error': f'Failed to complete voting: {str(e)}'}), 500
 
+# Reset Votes API
+@app.route('/api/voting/reset-votes', methods=['POST'])
+def reset_all_votes():
+    """Reset all votes for the active session"""
+    active_session = get_active_session()
+    if not active_session:
+        return jsonify({'error': 'No active session found'}), 400
+    
+    try:
+        # Reset voter has_voted status
+        Voter.query.update({'has_voted': False})
+        
+        # Reset candidate vote counts
+        Candidate.query.update({'votes': 0})
+        
+        # Delete all voting logs for this session
+        VotingLog.query.filter_by(session_id=active_session.id).delete()
+        
+        # Delete all multi voting logs for this session
+        from sqlalchemy import text
+        db.session.execute(text('DELETE FROM multi_voting_log WHERE session_id = :session_id'), 
+                          {'session_id': active_session.id})
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'All votes reset for session: {active_session.name}',
+            'session': {
+                'id': active_session.id,
+                'name': active_session.name
+            }
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to reset votes: {str(e)}'}), 500
+
+
+@app.route('/api/voting/reset-position/<int:position_id>', methods=['POST'])
+def reset_position_votes(position_id):
+    """Reset votes for a specific position"""
+    position = Position.query.get_or_404(position_id)
+    
+    try:
+        # Reset candidate vote counts for this position
+        Candidate.query.filter_by(position_id=position_id).update({'votes': 0})
+        
+        # Delete voting logs for this position
+        VotingLog.query.filter_by(position_id=position_id).delete()
+        
+        # Delete multi voting logs for this position
+        from sqlalchemy import text
+        db.session.execute(text('DELETE FROM multi_voting_log WHERE position_id = :position_id'), 
+                          {'position_id': position_id})
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Votes reset for position: {position.name}',
+            'position': {
+                'id': position.id,
+                'name': position.name
+            }
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to reset position votes: {str(e)}'}), 500
+
+
+@app.route('/api/voting/reset-voter/<int:voter_id>', methods=['POST'])
+def reset_voter(voter_id):
+    """Reset voting status for a specific voter"""
+    voter = Voter.query.get_or_404(voter_id)
+    
+    try:
+        # Reset voter status
+        voter.has_voted = False
+        
+        # Delete voting logs for this voter
+        VotingLog.query.filter_by(voter_id=voter_id).delete()
+        
+        # Delete multi voting logs for this voter
+        from sqlalchemy import text
+        db.session.execute(text('DELETE FROM multi_voting_log WHERE voter_id = :voter_id'), 
+                          {'voter_id': voter_id})
+        
+        # Decrement vote counts for candidates this voter voted for
+        # We need to handle this carefully to avoid negative votes
+        voting_logs = VotingLog.query.filter_by(voter_id=voter_id).all()
+        for log in voting_logs:
+            candidate = Candidate.query.get(log.candidate_id)
+            if candidate and candidate.votes > 0:
+                candidate.votes -= 1
+        
+        multi_voting_logs = db.session.execute(
+            text('SELECT candidate_id FROM multi_voting_log WHERE voter_id = :voter_id'),
+            {'voter_id': voter_id}
+        ).fetchall()
+        
+        for log in multi_voting_logs:
+            candidate = Candidate.query.get(log[0])
+            if candidate and candidate.votes > 0:
+                candidate.votes -= 1
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Voting status reset for voter: {voter.name}',
+            'voter': {
+                'id': voter.id,
+                'name': voter.name,
+                'student_id': voter.student_id,
+                'has_voted': voter.has_voted
+            }
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to reset voter: {str(e)}'}), 500
+    
 # Results API
 @app.route('/api/results/<int:session_id>')
 def get_session_results(session_id):
@@ -1006,6 +1226,86 @@ def get_session_results(session_id):
     
     return jsonify(results_data)
 
+@app.route('/api/voting/stats')
+def get_voting_stats():
+    """Get detailed voting statistics"""
+    active_session = get_active_session()
+    if not active_session:
+        return jsonify({'error': 'No active session found'}), 400
+    
+    try:
+        # Basic stats
+        total_voters = Voter.query.count()
+        voted_count = Voter.query.filter_by(has_voted=True).count()
+        not_voted_count = total_voters - voted_count
+        participation_rate = (voted_count / total_voters * 100) if total_voters > 0 else 0
+        
+        # Position-wise stats
+        positions = Position.query.filter_by(session_id=active_session.id).all()
+        position_stats = []
+        
+        for position in positions:
+            candidates = Candidate.query.filter_by(position_id=position.id).all()
+            total_votes = sum(candidate.votes for candidate in candidates)
+            candidate_stats = []
+            
+            for candidate in candidates:
+                percentage = (candidate.votes / total_votes * 100) if total_votes > 0 else 0
+                candidate_stats.append({
+                    'id': candidate.id,
+                    'name': candidate.name,
+                    'votes': candidate.votes,
+                    'percentage': round(percentage, 2)
+                })
+            
+            position_stats.append({
+                'id': position.id,
+                'name': position.name,
+                'total_votes': total_votes,
+                'candidates': candidate_stats
+            })
+        
+        # Grade-wise stats
+        voters_by_grade = db.session.execute(
+            text('''
+                SELECT grade, 
+                       COUNT(*) as total,
+                       SUM(CASE WHEN has_voted = true THEN 1 ELSE 0 END) as voted,
+                       ROUND((SUM(CASE WHEN has_voted = true THEN 1 ELSE 0 END) * 100.0 / COUNT(*)), 2) as participation_rate
+                FROM voters
+                GROUP BY grade
+                ORDER BY grade
+            ''')
+        ).fetchall()
+        
+        grade_stats = []
+        for row in voters_by_grade:
+            grade_stats.append({
+                'grade': row[0],
+                'total': row[1],
+                'voted': row[2],
+                'participation_rate': row[3]
+            })
+        
+        return jsonify({
+            'session': {
+                'id': active_session.id,
+                'name': active_session.name,
+                'academic_year': active_session.academic_year
+            },
+            'overall_stats': {
+                'total_voters': total_voters,
+                'voted': voted_count,
+                'not_voted': not_voted_count,
+                'participation_rate': round(participation_rate, 2)
+            },
+            'position_stats': position_stats,
+            'grade_stats': grade_stats
+        })
+        
+    except Exception as e:
+        return jsonify({'error': f'Failed to get stats: {str(e)}'}), 500
+    
 # Test database connection
 @app.route('/test-db')
 def test_db():
@@ -1039,3 +1339,6 @@ def health():
 
 # Vercel handler - THIS MUST BE AT THE END
 app
+
+if __name__ == "__main__":
+    app.run(port=5000)

@@ -17,6 +17,28 @@
         .stat-card:hover { transform: translateY(-2px); }
         .candidate-card { transition: all 0.3s; }
         .candidate-card:hover { transform: translateY(-2px); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1); }
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -48,14 +70,23 @@
                 <div>
                     <h2 id="activeSession" class="text-xl font-semibold text-gray-800">
                         {% if active_session %}
-                            ✅ Active Session: {{ active_session.name }} ({{ active_session.academic_year }})
+                            Active Session: {{ active_session.name }} ({{ active_session.academic_year }})
+                            <button onclick="showResetModal()" 
+                                class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors text-sm">
+                                Reset All Votes
+                            </button>
+                            <button onclick="showVotingStats()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm">
+                                View Stats
+                            </button>
                         {% else %}
-                            ❌ No Active Session
+                            No Active Session
                         {% endif %}
                     </h2>
                 </div>
-                <div class="text-sm text-gray-500">
-                    <span id="currentDateTime">{{ now.strftime('%Y-%m-%d %H:%M:%S') if now else '' }}</span>
+                <div class="flex space-x-2">
+                    <div class="text-sm text-gray-500">
+                        <span id="currentDateTime">{{ now.strftime('%Y-%m-%d %H:%M:%S') if now else '' }}</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -398,11 +429,368 @@
         </div>
     </main>
 
-    <!-- JavaScript -->
-    <script>
+    <!-- Reset Votes Modal -->
+<div id="resetModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <div class="mt-3">
+            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
+                <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.998-.833-2.732 0L4.342 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                </svg>
+            </div>
+            
+            <div class="mt-2 text-center">
+                <h3 class="text-lg font-medium text-gray-900">Reset Voting Data</h3>
+                
+                <div class="mt-4 px-4 space-y-4">
+                    <div class="text-sm text-gray-500 text-left">
+                        <p class="font-semibold mb-2">Select what to reset:</p>
+                        
+                        <div class="space-y-2">
+                            <label class="flex items-center">
+                                <input type="radio" name="resetOption" value="all" class="mr-2" checked>
+                                <span>Reset ALL votes for active session</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="radio" name="resetOption" value="position" class="mr-2">
+                                <span>Reset votes for specific position</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="radio" name="resetOption" value="voter" class="mr-2">
+                                <span>Reset voting status for specific voter</span>
+                            </label>
+                        </div>
+                        
+                        <!-- Position selection (hidden by default) -->
+                        <div id="positionSelectContainer" class="mt-2 hidden">
+                            <label class="block text-sm font-medium text-gray-700">Select Position:</label>
+                            <select id="positionSelect" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md">
+                                <!-- Positions will be loaded here -->
+                            </select>
+                        </div>
+                        
+                        <!-- Voter selection (hidden by default) -->
+                        <div id="voterSelectContainer" class="mt-2 hidden">
+                            <label class="block text-sm font-medium text-gray-700">Select Voter:</label>
+                            <select id="voterSelect" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md">
+                                <!-- Voters will be loaded here -->
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-yellow-50 border border-yellow-200 rounded p-3 text-left">
+                        <p class="text-sm text-yellow-700 font-semibold">Warning:</p>
+                        <p class="text-xs text-yellow-600 mt-1">
+                            This action cannot be undone. All selected voting data will be permanently deleted.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-4 flex justify-center space-x-3">
+                <button onclick="hideResetModal()" 
+                        class="px-4 py-2 bg-gray-300 text-gray-700 text-base font-medium rounded-md hover:bg-gray-400">
+                    Cancel
+                </button>
+                <button onclick="confirmReset()" 
+                        class="px-4 py-2 bg-red-600 text-white text-base font-medium rounded-md hover:bg-red-700">
+                    Confirm Reset
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
+<!-- JavaScript -->
+<script>
 
+// Reset Votes Functions
+let resetModal = null;
+let positionsList = [];
+let votersList = [];
 
+function showResetModal() {
+    resetModal = document.getElementById('resetModal');
+    resetModal.classList.remove('hidden');
+    
+    // Load positions and voters for selection
+    loadPositionsForReset();
+    loadVotersForReset();
+    
+    // Show/hide selection based on radio buttons
+    document.querySelectorAll('input[name="resetOption"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            const positionSelect = document.getElementById('positionSelectContainer');
+            const voterSelect = document.getElementById('voterSelectContainer');
+            
+            positionSelect.classList.add('hidden');
+            voterSelect.classList.add('hidden');
+            
+            if (this.value === 'position') {
+                positionSelect.classList.remove('hidden');
+            } else if (this.value === 'voter') {
+                voterSelect.classList.remove('hidden');
+            }
+        });
+    });
+}
+
+function hideResetModal() {
+    if (resetModal) {
+        resetModal.classList.add('hidden');
+    }
+}
+
+async function loadPositionsForReset() {
+    try {
+        const activeSession = await getActiveSession();
+        if (!activeSession) return;
+        
+        const data = await apiCall(`/api/sessions/${activeSession.id}/positions`);
+        positionsList = data.positions;
+        
+        const select = document.getElementById('positionSelect');
+        select.innerHTML = positionsList.map(pos => 
+            `<option value="${pos.id}">${pos.name}</option>`
+        ).join('');
+        
+    } catch (error) {
+        console.error('Failed to load positions:', error);
+    }
+}
+
+async function loadVotersForReset() {
+    try {
+        const data = await apiCall('/api/voters');
+        votersList = data.voters;
+        
+        const select = document.getElementById('voterSelect');
+        select.innerHTML = votersList.map(voter => 
+            `<option value="${voter.id}">${voter.name} (${voter.student_id})</option>`
+        ).join('');
+        
+    } catch (error) {
+        console.error('Failed to load voters:', error);
+    }
+}
+
+async function getActiveSession() {
+    try {
+        const response = await fetch('/api/sessions');
+        const data = await response.json();
+        return data.sessions.find(s => s.is_active);
+    } catch (error) {
+        console.error('Failed to get active session:', error);
+        return null;
+    }
+}
+
+async function confirmReset() {
+    const resetOption = document.querySelector('input[name="resetOption"]:checked').value;
+    
+    if (resetOption === 'position') {
+        const positionId = document.getElementById('positionSelect').value;
+        if (!positionId) {
+            alert('Please select a position');
+            return;
+        }
+        
+        if (!confirm(`Are you sure you want to reset ALL votes for this position? This cannot be undone.`)) {
+            return;
+        }
+        
+        try {
+            const data = await apiCall(`/api/voting/reset-position/${positionId}`, {
+                method: 'POST'
+            });
+            
+            alert(`SUCCESS: ${data.message}`);
+            updateStatus(data.message);
+            hideResetModal();
+            
+            // Reload relevant data
+            loadSessions();
+            loadVoters();
+            
+        } catch (error) {
+            alert(`ERROR: ${error.message}`);
+        }
+        
+    } else if (resetOption === 'voter') {
+        const voterId = document.getElementById('voterSelect').value;
+        if (!voterId) {
+            alert('Please select a voter');
+            return;
+        }
+        
+        const voter = votersList.find(v => v.id == voterId);
+        if (!voter) return;
+        
+        if (!confirm(`Are you sure you want to reset voting status for ${voter.name}? This cannot be undone.`)) {
+            return;
+        }
+        
+        try {
+            const data = await apiCall(`/api/voting/reset-voter/${voterId}`, {
+                method: 'POST'
+            });
+            
+            alert(`SUCCESS: ${data.message}`);
+            updateStatus(data.message);
+            hideResetModal();
+            
+            // Reload relevant data
+            loadVoters();
+            
+        } catch (error) {
+            alert(`ERROR: ${error.message}`);
+        }
+        
+    } else {
+        // Reset all votes
+        if (!confirm(`WARNING: This will reset ALL votes for the active session.\n\n• All voter status will be reset to "Not Voted"\n• All candidate vote counts will be set to 0\n• All voting records will be deleted\n\nThis action cannot be undone!`)) {
+            return;
+        }
+        
+        try {
+            const data = await apiCall('/api/voting/reset-votes', {
+                method: 'POST'
+            });
+            
+            alert(`SUCCESS: ${data.message}\n\nAll votes have been reset successfully.`);
+            updateStatus(data.message);
+            hideResetModal();
+            
+            // Reload all data
+            loadSessions();
+            loadVoters();
+            
+        } catch (error) {
+            alert(`ERROR: ${error.message}`);
+        }
+    }
+}
+
+// Add stats viewing functionality
+async function showVotingStats() {
+    try {
+        const data = await apiCall('/api/voting/stats');
+        
+        // Create a modal to display stats
+        const statsHtml = `
+            <div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+                <div class="relative top-10 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-bold text-gray-900">Voting Statistics</h3>
+                        <button onclick="closeStatsModal()" class="text-gray-400 hover:text-gray-600">
+                            &times;
+                        </button>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <!-- Session Info -->
+                        <div class="bg-blue-50 p-3 rounded">
+                            <h4 class="font-semibold text-blue-800">Session: ${data.session.name}</h4>
+                            <p class="text-blue-600">Academic Year: ${data.session.academic_year}</p>
+                        </div>
+                        
+                        <!-- Overall Stats -->
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                            <div class="bg-gray-100 p-3 rounded text-center">
+                                <div class="text-2xl font-bold">${data.overall_stats.total_voters}</div>
+                                <div class="text-sm text-gray-600">Total Voters</div>
+                            </div>
+                            <div class="bg-green-100 p-3 rounded text-center">
+                                <div class="text-2xl font-bold text-green-700">${data.overall_stats.voted}</div>
+                                <div class="text-sm text-green-600">Voted</div>
+                            </div>
+                            <div class="bg-orange-100 p-3 rounded text-center">
+                                <div class="text-2xl font-bold text-orange-700">${data.overall_stats.not_voted}</div>
+                                <div class="text-sm text-orange-600">Not Voted</div>
+                            </div>
+                            <div class="bg-purple-100 p-3 rounded text-center">
+                                <div class="text-2xl font-bold text-purple-700">${data.overall_stats.participation_rate}%</div>
+                                <div class="text-sm text-purple-600">Participation</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Grade-wise Stats -->
+                        <div class="mt-4">
+                            <h4 class="font-semibold text-gray-700 mb-2">Participation by Grade</h4>
+                            <div class="space-y-2">
+                                ${data.grade_stats.map(grade => `
+                                    <div class="flex items-center justify-between bg-gray-50 p-2 rounded">
+                                        <span class="font-medium">${grade.grade}</span>
+                                        <div class="flex items-center space-x-4">
+                                            <span class="text-sm">${grade.voted}/${grade.total} voted</span>
+                                            <span class="text-sm font-semibold ${grade.participation_rate >= 50 ? 'text-green-600' : 'text-orange-600'}">
+                                                ${grade.participation_rate}%
+                                            </span>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                        
+                        <!-- Position-wise Stats -->
+                        <div class="mt-4">
+                            <h4 class="font-semibold text-gray-700 mb-2">Position Results</h4>
+                            <div class="space-y-3">
+                                ${data.position_stats.map(position => `
+                                    <div class="border border-gray-200 rounded p-3">
+                                        <h5 class="font-semibold text-gray-800 mb-2">${position.name}</h5>
+                                        <div class="text-sm text-gray-600 mb-2">Total Votes: ${position.total_votes}</div>
+                                        <div class="space-y-1">
+                                            ${position.candidates.map(candidate => `
+                                                <div class="flex justify-between items-center">
+                                                    <span>${candidate.name}</span>
+                                                    <div class="flex items-center space-x-2">
+                                                        <span class="font-semibold">${candidate.votes} votes</span>
+                                                        <span class="text-xs bg-gray-100 px-2 py-1 rounded">${candidate.percentage}%</span>
+                                                    </div>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-6 flex justify-end">
+                        <button onclick="closeStatsModal()" 
+                                class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Add to body
+        const statsModal = document.createElement('div');
+        statsModal.id = 'statsModal';
+        statsModal.innerHTML = statsHtml;
+        document.body.appendChild(statsModal);
+        
+    } catch (error) {
+        alert('Failed to load voting statistics: ' + error.message);
+    }
+}
+
+function closeStatsModal() {
+    const statsModal = document.getElementById('statsModal');
+    if (statsModal) {
+        statsModal.remove();
+    }
+}
+
+// Add a button to view stats (optional - add this near the reset button)
+// You can add this button next to the reset button:
+// <button onclick="showVotingStats()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm">
+//     View Stats
+// </button>
 
 // Migration functionality
 let migrationStudents = [];
@@ -747,6 +1135,13 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Position Name</label>
                                 <input type="text" name="name" placeholder="e.g., School President" required
                                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Voting Type</label>
+                                <select name="voting_type" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="single">Single Vote (Choose 1 candidate)</option>
+                                    <option value="double">Double Vote (Choose 2 candidates)</option>
+                                </select>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Display Order</label>
@@ -1101,6 +1496,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             const position = votingPositions[currentPositionIndex];
             const votingScreen = document.getElementById('votingScreen');
+            const isDoubleVoting = position.voting_type === 'double';
             
             votingScreen.innerHTML = `
                 <div class="bg-white rounded-lg shadow-sm border">
@@ -1108,6 +1504,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="bg-blue-50 border-b p-6">
                         <h2 class="text-xl font-bold text-blue-800">🎭 CURRENT POSITION: ${position.name}</h2>
                         ${position.description ? `<p class="text-blue-700 mt-2">${position.description}</p>` : ''}
+                        ${isDoubleVoting ? 
+                            '<p class="text-green-700 font-bold mt-2">📝 Please select TWO candidates (1st and 2nd choice)</p>' : 
+                            '<p class="text-blue-700 mt-2">📝 Please select TWO candidate</p>'
+                        }
                     </div>
                     
                     <!-- Progress -->
@@ -1119,44 +1519,92 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     <!-- Candidates -->
                     <div class="p-6">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-4">👥 SELECT YOUR CANDIDATE</h3>
-                        
-                        ${position.candidates.length > 0 ? `
-                            <div class="space-y-4">
-                                ${position.candidates.map(candidate => `
-                                    <div class="candidate-card bg-white border border-gray-200 rounded-lg p-6">
-                                        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between">
-                                            <!-- Candidate Info -->
-                                            <div class="flex-1">
-                                                <div class="flex items-start space-x-4">
-                                                    ${candidate.photo_url ? 
-                                                        `<img src="${candidate.photo_url}" class="w-16 h-16 rounded-lg object-cover">` : 
-                                                        `<div class="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center text-2xl">📷</div>`
-                                                    }
-                                                    <div class="flex-1">
-                                                        <h4 class="text-lg font-semibold text-gray-800">
-                                                            👤 ${candidate.name} ${candidate.grade ? `| 🏫 ${candidate.grade}` : ''}
-                                                        </h4>
-                                                        ${candidate.manifesto ? `
-                                                            <div class="bg-gray-50 rounded p-3 mt-2">
-                                                                <p class="text-gray-600 text-sm">${candidate.manifesto}</p>
-                                                            </div>
-                                                        ` : ''}
+                        ${isDoubleVoting ? 
+                            `<h3 class="text-lg font-semibold text-gray-800 mb-4">👥 SELECT TWO CANDIDATES (1st and 2nd choice)</h3>
+                            <form id="doubleVoteForm">
+                                <div class="space-y-4" id="candidatesContainer">
+                                    ${position.candidates.map((candidate, index) => `
+                                        <div class="candidate-card bg-white border border-gray-200 rounded-lg p-6">
+                                            <div class="flex items-start space-x-4">
+                                                <!-- Checkbox Selection -->
+                                                <div class="flex items-center space-x-4">
+                                                    <div class="flex flex-col space-y-2">
+                                                        <div class="flex items-center">
+                                                            <input type="radio" 
+                                                                name="first_choice" 
+                                                                value="${candidate.id}" 
+                                                                id="first_${candidate.id}"
+                                                                class="mr-2"
+                                                                onchange="updateDoubleVoteSelection()">
+                                                            <label for="first_${candidate.id}" class="text-sm font-medium text-green-700">
+                                                                1st Choice
+                                                            </label>
+                                                        </div>
+                                                        <div class="flex items-center">
+                                                            <input type="radio" 
+                                                                name="second_choice" 
+                                                                value="${candidate.id}" 
+                                                                id="second_${candidate.id}"
+                                                                class="mr-2"
+                                                                onchange="updateDoubleVoteSelection()">
+                                                            <label for="second_${candidate.id}" class="text-sm font-medium text-blue-700">
+                                                                2nd Choice
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- Candidate Info -->
+                                                <div class="flex-1">
+                                                    <div class="flex items-start space-x-4">
+                                                        ${candidate.photo_url ? 
+                                                            `<img src="${candidate.photo_url}" class="w-16 h-16 rounded-lg object-cover">` : 
+                                                            `<div class="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center text-2xl">📷</div>`
+                                                        }
+                                                        <div class="flex-1">
+                                                            <h4 class="text-lg font-semibold text-gray-800">
+                                                                👤 ${candidate.name} ${candidate.grade ? `| 🏫 ${candidate.grade}` : ''}
+                                                            </h4>
+                                                            ${candidate.manifesto ? `
+                                                                <div class="bg-gray-50 rounded p-3 mt-2">
+                                                                    <p class="text-gray-600 text-sm">${candidate.manifesto}</p>
+                                                                </div>
+                                                            ` : ''}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
-                                            
-                                            <!-- Vote Button -->
-                                            <div class="mt-4 lg:mt-0 lg:ml-4">
-                                                <button onclick="castVote(${position.id}, ${candidate.id})" 
-                                                        class="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors font-semibold">
-                                                    ✅ VOTE FOR THIS CANDIDATE
-                                                </button>
-                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                                
+                                <!-- Selected Choices Display -->
+                                <div id="selectedChoices" class="mt-6 bg-green-50 border border-green-200 rounded-lg p-4 hidden">
+                                    <h4 class="font-semibold text-green-800 mb-2">✅ Your Selections:</h4>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div id="firstChoiceDisplay" class="bg-white border border-green-300 rounded p-3">
+                                            <span class="text-green-700 font-medium">1st Choice:</span>
+                                            <span class="ml-2 text-gray-700">Not selected</span>
+                                        </div>
+                                        <div id="secondChoiceDisplay" class="bg-white border border-blue-300 rounded p-3">
+                                            <span class="text-blue-700 font-medium">2nd Choice:</span>
+                                            <span class="ml-2 text-gray-700">Not selected</span>
                                         </div>
                                     </div>
-                                `).join('')}
-                            </div>
+                                </div>
+                                
+                                <!-- Vote Button -->
+                                <div class="mt-6 text-center">
+                                    <button type="button" 
+                                            onclick="castDoubleVote(${position.id})" 
+                                            id="doubleVoteBtn"
+                                            disabled
+                                            class="bg-gray-400 text-white px-6 py-3 rounded-lg font-semibold cursor-not-allowed">
+                                        ✅ SUBMIT TWO VOTES
+                                    </button>
+                                    <p class="text-sm text-gray-600 mt-2">Please select both 1st and 2nd choice candidates</p>
+                                </div>
+                            </form>
                             
                             <!-- Skip Button -->
                             <div class="mt-6 text-center">
@@ -1164,17 +1612,150 @@ document.addEventListener('DOMContentLoaded', function() {
                                     ⏭️ SKIP POSITION
                                 </button>
                             </div>
-                        ` : `
-                            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
-                                <p class="text-yellow-700 text-lg">ℹ️ NO CANDIDATES AVAILABLE FOR THIS POSITION</p>
-                                <button onclick="skipPosition()" class="bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition-colors mt-4">
-                                    ⏭️ SKIP POSITION
-                                </button>
-                            </div>
-                        `}
+                            ` : 
+                            // Single voting interface (existing code)
+                            `<h3 class="text-lg font-semibold text-gray-800 mb-4">👥 SELECT YOUR CANDIDATE</h3>
+                            ${position.candidates.length > 0 ? `
+                                <div class="space-y-4">
+                                    ${position.candidates.map(candidate => `
+                                        <div class="candidate-card bg-white border border-gray-200 rounded-lg p-6">
+                                            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+                                                <!-- Candidate Info -->
+                                                <div class="flex-1">
+                                                    <div class="flex items-start space-x-4">
+                                                        ${candidate.photo_url ? 
+                                                            `<img src="${candidate.photo_url}" class="w-16 h-16 rounded-lg object-cover">` : 
+                                                            `<div class="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center text-2xl">📷</div>`
+                                                        }
+                                                        <div class="flex-1">
+                                                            <h4 class="text-lg font-semibold text-gray-800">
+                                                                👤 ${candidate.name} ${candidate.grade ? `| 🏫 ${candidate.grade}` : ''}
+                                                            </h4>
+                                                            ${candidate.manifesto ? `
+                                                                <div class="bg-gray-50 rounded p-3 mt-2">
+                                                                    <p class="text-gray-600 text-sm">${candidate.manifesto}</p>
+                                                                </div>
+                                                            ` : ''}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- Vote Button -->
+                                                <div class="mt-4 lg:mt-0 lg:ml-4">
+                                                    <button onclick="castVote(${position.id}, ${candidate.id})" 
+                                                            class="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors font-semibold">
+                                                        ✅ VOTE FOR THIS CANDIDATE
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                                
+                                <!-- Skip Button -->
+                                <div class="mt-6 text-center">
+                                    <button onclick="skipPosition()" class="bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition-colors">
+                                        ⏭️ SKIP POSITION
+                                    </button>
+                                </div>
+                            ` : `
+                                <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+                                    <p class="text-yellow-700 text-lg">ℹ️ NO CANDIDATES AVAILABLE FOR THIS POSITION</p>
+                                    <button onclick="skipPosition()" class="bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition-colors mt-4">
+                                        ⏭️ SKIP POSITION
+                                    </button>
+                                </div>
+                            `}
+                            `
+                        }
                     </div>
                 </div>
             `;
+        }
+
+        // Add these new JavaScript functions
+        let selectedFirstChoice = null;
+        let selectedSecondChoice = null;
+
+        function updateDoubleVoteSelection() {
+            const form = document.getElementById('doubleVoteForm');
+            if (!form) return;
+            
+            const firstChoice = form.first_choice.value;
+            const secondChoice = form.second_choice.value;
+            
+            selectedFirstChoice = firstChoice;
+            selectedSecondChoice = secondChoice;
+            
+            // Update display
+            const firstChoiceDisplay = document.getElementById('firstChoiceDisplay');
+            const secondChoiceDisplay = document.getElementById('secondChoiceDisplay');
+            const selectedChoicesDiv = document.getElementById('selectedChoices');
+            const voteBtn = document.getElementById('doubleVoteBtn');
+            
+            if (firstChoice) {
+                const candidateName = getCandidateName(firstChoice);
+                firstChoiceDisplay.innerHTML = `<span class="text-green-700 font-medium">1st Choice:</span> <span class="ml-2 font-semibold">${candidateName}</span>`;
+            } else {
+                firstChoiceDisplay.innerHTML = '<span class="text-green-700 font-medium">1st Choice:</span> <span class="ml-2 text-gray-700">Not selected</span>';
+            }
+            
+            if (secondChoice) {
+                const candidateName = getCandidateName(secondChoice);
+                secondChoiceDisplay.innerHTML = `<span class="text-blue-700 font-medium">2nd Choice:</span> <span class="ml-2 font-semibold">${candidateName}</span>`;
+            } else {
+                secondChoiceDisplay.innerHTML = '<span class="text-blue-700 font-medium">2nd Choice:</span> <span class="ml-2 text-gray-700">Not selected</span>';
+            }
+            
+            // Show/hide selections display
+            if (firstChoice || secondChoice) {
+                selectedChoicesDiv.classList.remove('hidden');
+            } else {
+                selectedChoicesDiv.classList.add('hidden');
+            }
+            
+            // Enable/disable vote button
+            if (firstChoice && secondChoice && firstChoice !== secondChoice) {
+                voteBtn.disabled = false;
+                voteBtn.classList.remove('bg-gray-400', 'cursor-not-allowed');
+                voteBtn.classList.add('bg-green-600', 'hover:bg-green-700', 'cursor-pointer');
+            } else {
+                voteBtn.disabled = true;
+                voteBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
+                voteBtn.classList.remove('bg-green-600', 'hover:bg-green-700', 'cursor-pointer');
+            }
+        }
+
+        function getCandidateName(candidateId) {
+            const position = votingPositions[currentPositionIndex];
+            const candidate = position.candidates.find(c => c.id == candidateId);
+            return candidate ? candidate.name : 'Unknown';
+        }
+
+        async function castDoubleVote(positionId) {
+            if (!selectedFirstChoice || !selectedSecondChoice || selectedFirstChoice === selectedSecondChoice) {
+                alert('Please select two different candidates');
+                return;
+            }
+            
+            try {
+                await apiCall('/api/voting/vote-double', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        position_id: positionId,
+                        first_choice_id: selectedFirstChoice,
+                        second_choice_id: selectedSecondChoice
+                    })
+                });
+                
+                updateStatus('Two votes cast successfully');
+                selectedFirstChoice = null;
+                selectedSecondChoice = null;
+                currentPositionIndex++;
+                showCurrentPosition();
+            } catch (error) {
+                alert('Failed to cast votes: ' + error.message);
+            }
         }
 
         async function castVote(positionId, candidateId) {
